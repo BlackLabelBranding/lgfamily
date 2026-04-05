@@ -4,6 +4,15 @@ import Sidebar from '@/components/Sidebar.jsx';
 import Header from '@/components/Header.jsx';
 import FamilyMemberCard from '@/components/FamilyMemberCard.jsx';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Plus } from 'lucide-react';
 import { addFamilyMember, getFamilyMembers } from '@/lib/family.js';
 
@@ -12,6 +21,15 @@ function FamilyPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const [form, setForm] = useState({
+    first_name: '',
+    last_name: '',
+    relationship: '',
+    birth_date: '',
+    notes: '',
+  });
 
   async function loadMembers() {
     try {
@@ -30,31 +48,55 @@ function FamilyPage() {
     loadMembers();
   }, []);
 
-  async function handleAddMember() {
-    const firstName = window.prompt('First name');
-    if (!firstName) return;
+  function updateField(field, value) {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
 
-    const lastName = window.prompt('Last name (optional)') || '';
-    const relationship = window.prompt('Relationship (self, partner, child, mother, father, etc.)') || 'family';
-    const birthDate = window.prompt('Birth date (YYYY-MM-DD, optional)') || '';
+  function resetForm() {
+    setForm({
+      first_name: '',
+      last_name: '',
+      relationship: '',
+      birth_date: '',
+      notes: '',
+    });
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (!form.first_name.trim()) {
+      setError('First name is required.');
+      return;
+    }
 
     try {
       setSaving(true);
+      setError('');
 
-      const displayName = [firstName, lastName].filter(Boolean).join(' ').trim();
+      const displayName = [form.first_name, form.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
 
       await addFamilyMember({
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        display_name: displayName || firstName.trim(),
-        relationship: relationship.trim(),
-        birth_date: birthDate.trim() || null,
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim(),
+        display_name: displayName || form.first_name.trim(),
+        relationship: form.relationship.trim() || 'family',
+        birth_date: form.birth_date || null,
+        notes: form.notes.trim() || null,
       });
 
+      resetForm();
+      setOpen(false);
       await loadMembers();
     } catch (err) {
       console.error('Error adding family member:', err);
-      alert(err.message || 'Failed to add family member.');
+      setError(err.message || 'Failed to add family member.');
     } finally {
       setSaving(false);
     }
@@ -75,7 +117,10 @@ function FamilyPage() {
             <div className="max-w-7xl mx-auto">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
                 <div>
-                  <h1 className="text-3xl font-bold mb-2" style={{ letterSpacing: '-0.02em' }}>
+                  <h1
+                    className="text-3xl font-bold mb-2"
+                    style={{ letterSpacing: '-0.02em' }}
+                  >
                     Family
                   </h1>
                   <p className="text-muted-foreground">
@@ -85,11 +130,10 @@ function FamilyPage() {
 
                 <Button
                   className="gap-2 touch-target"
-                  onClick={handleAddMember}
-                  disabled={saving}
+                  onClick={() => setOpen(true)}
                 >
                   <Plus className="h-4 w-4" />
-                  {saving ? 'Saving...' : 'Add member'}
+                  Add member
                 </Button>
               </div>
 
@@ -97,7 +141,7 @@ function FamilyPage() {
                 <p className="text-muted-foreground">Loading family...</p>
               )}
 
-              {error && (
+              {error && !open && (
                 <p className="text-sm text-red-500 mb-4">{error}</p>
               )}
 
@@ -109,9 +153,14 @@ function FamilyPage() {
                 {members.map((member) => {
                   const fullName =
                     member.display_name ||
-                    [member.first_name, member.last_name].filter(Boolean).join(' ').trim();
+                    [member.first_name, member.last_name]
+                      .filter(Boolean)
+                      .join(' ')
+                      .trim();
 
-                  const initials = `${member.first_name?.[0] || ''}${member.last_name?.[0] || ''}` || '?';
+                  const initials =
+                    `${member.first_name?.[0] || ''}${member.last_name?.[0] || ''}` ||
+                    '?';
 
                   return (
                     <FamilyMemberCard
@@ -132,6 +181,90 @@ function FamilyPage() {
           </main>
         </div>
       </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add family member</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && open && (
+              <p className="text-sm text-red-500">{error}</p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="first_name">First name</Label>
+                <Input
+                  id="first_name"
+                  value={form.first_name}
+                  onChange={(e) => updateField('first_name', e.target.value)}
+                  placeholder="Lance"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="last_name">Last name</Label>
+                <Input
+                  id="last_name"
+                  value={form.last_name}
+                  onChange={(e) => updateField('last_name', e.target.value)}
+                  placeholder="Garza"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="relationship">Relationship</Label>
+              <Input
+                id="relationship"
+                value={form.relationship}
+                onChange={(e) => updateField('relationship', e.target.value)}
+                placeholder="self, partner, child, mother, father"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="birth_date">Birth date</Label>
+              <Input
+                id="birth_date"
+                type="date"
+                value={form.birth_date}
+                onChange={(e) => updateField('birth_date', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Input
+                id="notes"
+                value={form.notes}
+                onChange={(e) => updateField('notes', e.target.value)}
+                placeholder="Optional notes"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setOpen(false);
+                  resetForm();
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving...' : 'Save member'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
