@@ -1,14 +1,22 @@
 import { supabase } from '@/lib/supabaseClient.js';
 
-export async function getDashboardIdentity() {
+export async function getDashboardData() {
   const {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
 
   if (userError) throw userError;
+
   if (!user) {
-    throw new Error('Authenticated user missing!');
+    return {
+      user: null,
+      profile: null,
+      membership: null,
+      stats: {
+        familyCount: 0,
+      },
+    };
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -23,6 +31,7 @@ export async function getDashboardIdentity() {
     .from('household_members')
     .select(`
       id,
+      household_id,
       role,
       household:households (
         id,
@@ -35,9 +44,24 @@ export async function getDashboardIdentity() {
 
   if (membershipError) throw membershipError;
 
+  let familyCount = 0;
+
+  if (membership?.household_id) {
+    const { count, error: familyCountError } = await supabase
+      .from('family_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('household_id', membership.household_id);
+
+    if (familyCountError) throw familyCountError;
+    familyCount = count ?? 0;
+  }
+
   return {
     user,
     profile,
     membership,
+    stats: {
+      familyCount,
+    },
   };
 }
