@@ -1,39 +1,9 @@
 import { supabase } from '@/lib/supabaseClient.js';
 
+const DEV_HOUSEHOLD_ID = 'PASTE_YOUR_GARZA_FAMILY_HOUSEHOLD_ID_HERE';
+
 export async function getCurrentHouseholdId() {
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError) {
-    console.error('Auth lookup error:', userError.message);
-  }
-
-  if (user) {
-    const { data, error } = await supabase
-      .from('household_members')
-      .select('household_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    if (data?.household_id) {
-      return data.household_id;
-    }
-  }
-
-  const { data: fallbackHousehold, error: fallbackError } = await supabase
-    .from('households')
-    .select('id')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (fallbackError) throw fallbackError;
-
-  return fallbackHousehold?.id ?? null;
+  return DEV_HOUSEHOLD_ID;
 }
 
 export async function getFamilyMembers() {
