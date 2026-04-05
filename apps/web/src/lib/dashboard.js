@@ -7,7 +7,9 @@ export async function getDashboardIdentity() {
   } = await supabase.auth.getUser();
 
   if (userError) throw userError;
-  if (!user) return null;
+  if (!user) {
+    throw new Error('Authenticated user missing!');
+  }
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
