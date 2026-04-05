@@ -6,18 +6,34 @@ export async function getCurrentHouseholdId() {
     error: userError,
   } = await supabase.auth.getUser();
 
-  if (userError) throw userError;
-  if (!user) return null;
+  if (userError) {
+    console.error('Auth lookup error:', userError.message);
+  }
 
-  const { data, error } = await supabase
-    .from('household_members')
-    .select('household_id')
-    .eq('user_id', user.id)
+  if (user) {
+    const { data, error } = await supabase
+      .from('household_members')
+      .select('household_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (data?.household_id) {
+      return data.household_id;
+    }
+  }
+
+  const { data: fallbackHousehold, error: fallbackError } = await supabase
+    .from('households')
+    .select('id')
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
 
-  if (error) throw error;
+  if (fallbackError) throw fallbackError;
 
-  return data?.household_id ?? null;
+  return fallbackHousehold?.id ?? null;
 }
 
 export async function getFamilyMembers() {
@@ -40,7 +56,7 @@ export async function addFamilyMember(member) {
   const householdId = await getCurrentHouseholdId();
 
   if (!householdId) {
-    throw new Error('You must be signed in and linked to a household to add members.');
+    throw new Error('No household found. Create a household first.');
   }
 
   const payload = {
