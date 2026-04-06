@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabaseClient.js';
 
-const DEV_HOUSEHOLD_ID = 'PASTE_YOUR_GARZA_FAMILY_HOUSEHOLD_ID_HERE';
+const DEV_HOUSEHOLD_ID = 'd2b8464e-a258-46a0-89de-a1b921062943';
 
 export async function getCurrentHouseholdId() {
   return DEV_HOUSEHOLD_ID;
