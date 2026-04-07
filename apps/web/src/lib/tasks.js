@@ -1,5 +1,9 @@
+import { supabase } from './supabase';
+
 export async function getTasks() {
-  return [];
+  const { data, error } = await supabase.from('tasks').select('*').limit(1);
+  if (error) throw error;
+  return data ?? [];
 }
 
 export async function addTask() {
