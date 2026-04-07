@@ -1,38 +1,22 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import TaskList from '@/components/tasks/TaskList';
-import AddTaskDialog from '@/components/tasks/AddTaskDialog';
 import {
   getTasks,
   addTask,
-  updateTask,
   toggleTaskComplete,
   deleteTask,
 } from '@/lib/tasks';
 
-function isSameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
 export default function TasksPage() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
-  const [saving, setSaving] = useState(false);
 
   async function loadTasks() {
-    setLoading(true);
     try {
       const data = await getTasks();
       setTasks(data || []);
-    } catch (err) {
-      console.error('Failed to load tasks:', err);
-      alert(err.message || 'Failed to load tasks');
+    } catch (error) {
+      console.error('Failed to load tasks:', error);
     } finally {
       setLoading(false);
     }
@@ -42,65 +26,16 @@ export default function TasksPage() {
     loadTasks();
   }, []);
 
-  const grouped = useMemo(() => {
-    const now = new Date();
-    const overdue = [];
-    const today = [];
-    const upcoming = [];
-    const completed = [];
+  async function handleAddTask() {
+    const title = window.prompt('Task title');
+    if (!title?.trim()) return;
 
-    for (const task of tasks) {
-      if (task.status === 'completed') {
-        completed.push(task);
-        continue;
-      }
-
-      if (!task.due_at) {
-        upcoming.push(task);
-        continue;
-      }
-
-      const due = new Date(task.due_at);
-
-      if (due < now && !isSameDay(due, now)) {
-        overdue.push(task);
-      } else if (isSameDay(due, now)) {
-        today.push(task);
-      } else {
-        upcoming.push(task);
-      }
-    }
-
-    return { overdue, today, upcoming, completed };
-  }, [tasks]);
-
-  function openCreate() {
-    setEditingTask(null);
-    setDialogOpen(true);
-  }
-
-  function openEdit(task) {
-    setEditingTask(task);
-    setDialogOpen(true);
-  }
-
-  async function handleSubmit(formData) {
-    setSaving(true);
     try {
-      if (editingTask) {
-        await updateTask(editingTask.id, formData);
-      } else {
-        await addTask(formData);
-      }
-
-      setDialogOpen(false);
-      setEditingTask(null);
+      await addTask({ title: title.trim() });
       await loadTasks();
-    } catch (err) {
-      console.error('Failed to save task:', err);
-      alert(err.message || 'Failed to save task');
-    } finally {
-      setSaving(false);
+    } catch (error) {
+      console.error('Failed to add task:', error);
+      alert(error.message || 'Failed to add task');
     }
   }
 
@@ -108,89 +43,75 @@ export default function TasksPage() {
     try {
       await toggleTaskComplete(task);
       await loadTasks();
-    } catch (err) {
-      console.error('Failed to toggle task:', err);
-      alert(err.message || 'Failed to update task');
+    } catch (error) {
+      console.error('Failed to update task:', error);
+      alert(error.message || 'Failed to update task');
     }
   }
 
   async function handleDelete(id) {
-    const confirmed = window.confirm('Delete this task?');
-    if (!confirmed) return;
+    if (!window.confirm('Delete this task?')) return;
 
     try {
       await deleteTask(id);
       await loadTasks();
-    } catch (err) {
-      console.error('Failed to delete task:', err);
-      alert(err.message || 'Failed to delete task');
+    } catch (error) {
+      console.error('Failed to delete task:', error);
+      alert(error.message || 'Failed to delete task');
     }
   }
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Tasks & Reminders</h1>
-          <p className="text-sm text-slate-500">
-            Household tasks, reminders, and due dates.
-          </p>
+          <p className="text-sm text-slate-500">Household tasks synced from Supabase.</p>
         </div>
-
-        <Button onClick={openCreate}>Add Task</Button>
+        <Button onClick={handleAddTask}>Add Task</Button>
       </div>
 
       {loading ? (
         <div className="rounded-xl border p-6 text-sm text-slate-500">
           Loading tasks...
         </div>
+      ) : tasks.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-6 text-sm text-slate-500">
+          No tasks yet.
+        </div>
       ) : (
-        <div className="space-y-8">
-          <TaskList
-            title="Overdue"
-            tasks={grouped.overdue}
-            emptyText="No overdue tasks."
-            onToggle={handleToggle}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
+        <div className="space-y-3">
+          {tasks.map((task) => (
+            <div key={task.id} className="rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3
+                    className={
+                      task.status === 'completed'
+                        ? 'font-medium text-slate-400 line-through'
+                        : 'font-medium text-slate-900'
+                    }
+                  >
+                    {task.title}
+                  </h3>
+                  {task.notes ? (
+                    <p className="mt-1 text-sm text-slate-500">{task.notes}</p>
+                  ) : null}
+                </div>
 
-          <TaskList
-            title="Today"
-            tasks={grouped.today}
-            emptyText="Nothing due today."
-            onToggle={handleToggle}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
-
-          <TaskList
-            title="Upcoming"
-            tasks={grouped.upcoming}
-            emptyText="No upcoming tasks."
-            onToggle={handleToggle}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
-
-          <TaskList
-            title="Completed"
-            tasks={grouped.completed}
-            emptyText="No completed tasks yet."
-            onToggle={handleToggle}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleToggle(task)}>
+                    {task.status === 'completed' ? 'Reopen' : 'Complete'}
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => handleDelete(task.id)}>
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
-
-      <AddTaskDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSubmit={handleSubmit}
-        task={editingTask}
-        isSaving={saving}
-      />
     </div>
   );
 }
