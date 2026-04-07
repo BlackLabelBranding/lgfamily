@@ -16,21 +16,21 @@ export async function getTasks() {
 }
 
 export async function addTask(task) {
-  const payload = {
-    household_id: DEV_HOUSEHOLD_ID,
-    title: task.title?.trim(),
-    notes: task.notes?.trim() || null,
-    due_at: task.due_at || null,
-    reminder_at: task.reminder_at || null,
-    priority: task.priority || 'medium',
-    status: 'open',
-    assigned_to: task.assigned_to?.trim() || null,
-    completed_at: null,
-  };
-
   const { data, error } = await supabase
     .from('tasks')
-    .insert([payload])
+    .insert([
+      {
+        household_id: DEV_HOUSEHOLD_ID,
+        title: task.title?.trim(),
+        notes: task.notes?.trim() || null,
+        due_at: task.due_at || null,
+        reminder_at: task.reminder_at || null,
+        priority: task.priority || 'medium',
+        status: 'open',
+        assigned_to: task.assigned_to?.trim() || null,
+        completed_at: null,
+      },
+    ])
     .select()
     .single();
 
@@ -39,18 +39,12 @@ export async function addTask(task) {
 }
 
 export async function updateTask(id, updates) {
-  const payload = {
-    ...updates,
-    household_id: DEV_HOUSEHOLD_ID,
-  };
-
-  if (typeof payload.title === 'string') payload.title = payload.title.trim();
-  if (typeof payload.notes === 'string') payload.notes = payload.notes.trim() || null;
-  if (typeof payload.assigned_to === 'string') payload.assigned_to = payload.assigned_to.trim() || null;
-
   const { data, error } = await supabase
     .from('tasks')
-    .update(payload)
+    .update({
+      ...updates,
+      household_id: DEV_HOUSEHOLD_ID,
+    })
     .eq('id', id)
     .eq('household_id', DEV_HOUSEHOLD_ID)
     .select()
