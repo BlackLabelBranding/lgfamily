@@ -4,14 +4,19 @@ import { getTasks, addTask, toggleTaskComplete, deleteTask } from '@/lib/tasks.j
 function TasksPage() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [errorText, setErrorText] = useState('');
 
   async function loadTasks() {
+    setLoading(true);
+    setErrorText('');
+
     try {
       const data = await getTasks();
+      console.log('TASKS DATA:', data);
       setTasks(data || []);
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      alert(error.message || 'Failed to load tasks');
+      setErrorText(error?.message || 'Failed to load tasks');
     } finally {
       setLoading(false);
     }
@@ -30,7 +35,7 @@ function TasksPage() {
       await loadTasks();
     } catch (error) {
       console.error('Failed to add task:', error);
-      alert(error.message || 'Failed to add task');
+      setErrorText(error?.message || 'Failed to add task');
     }
   }
 
@@ -40,7 +45,7 @@ function TasksPage() {
       await loadTasks();
     } catch (error) {
       console.error('Failed to update task:', error);
-      alert(error.message || 'Failed to update task');
+      setErrorText(error?.message || 'Failed to update task');
     }
   }
 
@@ -52,7 +57,7 @@ function TasksPage() {
       await loadTasks();
     } catch (error) {
       console.error('Failed to delete task:', error);
-      alert(error.message || 'Failed to delete task');
+      setErrorText(error?.message || 'Failed to delete task');
     }
   }
 
@@ -70,6 +75,12 @@ function TasksPage() {
           Add Task
         </button>
       </div>
+
+      {errorText ? (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-700">
+          {errorText}
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="rounded-xl border p-6 text-sm text-slate-500">
