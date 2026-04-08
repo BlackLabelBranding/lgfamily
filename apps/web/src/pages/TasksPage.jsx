@@ -6,6 +6,7 @@ import {
   toggleTaskComplete,
   deleteTask,
 } from '@/lib/tasks.js';
+import { getFamilyMembers } from '@/lib/family.js';
 
 function formatDate(value) {
   if (!value) return null;
@@ -38,7 +39,11 @@ function isOverdue(dateString) {
   return d < now && !isToday(dateString);
 }
 
-function TaskModal({ open, onClose, onSave, task, saving }) {
+function getMemberDisplayName(member) {
+  return member.display_name || member.first_name || 'Unnamed';
+}
+
+function TaskModal({ open, onClose, onSave, task, saving, familyMembers = [] }) {
   const [form, setForm] = useState({
     title: '',
     notes: '',
@@ -86,7 +91,7 @@ function TaskModal({ open, onClose, onSave, task, saving }) {
       due_at: form.due_at ? new Date(form.due_at).toISOString() : null,
       reminder_at: form.reminder_at ? new Date(form.reminder_at).toISOString() : null,
       priority: form.priority || 'medium',
-      assigned_to: form.assigned_to.trim() || null,
+      assigned_to: form.assigned_to || null,
     });
   }
 
@@ -175,13 +180,21 @@ function TaskModal({ open, onClose, onSave, task, saving }) {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Assigned To</label>
-              <input
-                type="text"
-                value={form.assigned_to}
+              <select
+                value={form.assigned_to || ''}
                 onChange={(e) => updateField('assigned_to', e.target.value)}
-                placeholder="Shelby"
                 className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              />
+              >
+                <option value="">Unassigned</option>
+                {familyMembers.map((member) => {
+                  const name = getMemberDisplayName(member);
+                  return (
+                    <option key={member.id} value={name}>
+                      {name}
+                    </option>
+                  );
+                })}
+              </select>
             </div>
           </div>
 
@@ -318,29 +331,35 @@ function TaskSection({ title, tasks, emptyText, onToggle, onEdit, onDelete }) {
 
 function TasksPage() {
   const [tasks, setTasks] = useState([]);
+  const [familyMembers, setFamilyMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  async function loadTasks() {
+  async function loadTasksAndFamily() {
     setLoading(true);
     setErrorText('');
 
     try {
-      const data = await getTasks();
-      setTasks(data || []);
+      const [taskData, familyData] = await Promise.all([
+        getTasks(),
+        getFamilyMembers(),
+      ]);
+
+      setTasks(taskData || []);
+      setFamilyMembers(familyData || []);
     } catch (error) {
-      console.error('Failed to load tasks:', error);
-      setErrorText(error?.message || 'Failed to load tasks');
+      console.error('Failed to load data:', error);
+      setErrorText(error?.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadTasks();
+    loadTasksAndFamily();
   }, []);
 
   function handleOpenCreate() {
@@ -372,7 +391,7 @@ function TasksPage() {
 
       setModalOpen(false);
       setEditingTask(null);
-      await loadTasks();
+      await loadTasksAndFamily();
     } catch (error) {
       console.error('Failed to save task:', error);
       setErrorText(error?.message || 'Failed to save task');
@@ -384,7 +403,7 @@ function TasksPage() {
   async function handleToggle(task) {
     try {
       await toggleTaskComplete(task);
-      await loadTasks();
+      await loadTasksAndFamily();
     } catch (error) {
       console.error('Failed to update task:', error);
       setErrorText(error?.message || 'Failed to update task');
@@ -396,7 +415,7 @@ function TasksPage() {
 
     try {
       await deleteTask(id);
-      await loadTasks();
+      await loadTasksAndFamily();
     } catch (error) {
       console.error('Failed to delete task:', error);
       setErrorText(error?.message || 'Failed to delete task');
@@ -504,6 +523,7 @@ function TasksPage() {
         onSave={handleSaveTask}
         task={editingTask}
         saving={saving}
+        familyMembers={familyMembers}
       />
     </div>
   );
