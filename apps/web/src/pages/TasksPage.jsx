@@ -1,9 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getTasks, addTask, toggleTaskComplete, deleteTask } from '@/lib/tasks.js';
+import {
+  getTasks,
+  addTask,
+  updateTask,
+  toggleTaskComplete,
+  deleteTask,
+} from '@/lib/tasks.js';
 
 function formatDate(value) {
   if (!value) return null;
   return new Date(value).toLocaleString();
+}
+
+function toDatetimeLocal(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function isToday(dateString) {
@@ -25,7 +38,177 @@ function isOverdue(dateString) {
   return d < now && !isToday(dateString);
 }
 
-function TaskCard({ task, onToggle, onDelete }) {
+function TaskModal({ open, onClose, onSave, task, saving }) {
+  const [form, setForm] = useState({
+    title: '',
+    notes: '',
+    due_at: '',
+    reminder_at: '',
+    priority: 'medium',
+    assigned_to: '',
+  });
+
+  useEffect(() => {
+    if (task) {
+      setForm({
+        title: task.title || '',
+        notes: task.notes || '',
+        due_at: toDatetimeLocal(task.due_at),
+        reminder_at: toDatetimeLocal(task.reminder_at),
+        priority: task.priority || 'medium',
+        assigned_to: task.assigned_to || '',
+      });
+    } else {
+      setForm({
+        title: '',
+        notes: '',
+        due_at: '',
+        reminder_at: '',
+        priority: 'medium',
+        assigned_to: '',
+      });
+    }
+  }, [task, open]);
+
+  if (!open) return null;
+
+  function updateField(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+
+    await onSave({
+      title: form.title.trim(),
+      notes: form.notes.trim() || null,
+      due_at: form.due_at ? new Date(form.due_at).toISOString() : null,
+      reminder_at: form.reminder_at ? new Date(form.reminder_at).toISOString() : null,
+      priority: form.priority || 'medium',
+      assigned_to: form.assigned_to.trim() || null,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">
+                {task ? 'Edit Task' : 'Add Task'}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Create and manage household tasks and reminders.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Title</label>
+            <input
+              type="text"
+              value={form.title}
+              onChange={(e) => updateField('title', e.target.value)}
+              placeholder="Take out trash"
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => updateField('notes', e.target.value)}
+              placeholder="Optional details"
+              rows={4}
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+            />
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Due Date</label>
+              <input
+                type="datetime-local"
+                value={form.due_at}
+                onChange={(e) => updateField('due_at', e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Reminder</label>
+              <input
+                type="datetime-local"
+                value={form.reminder_at}
+                onChange={(e) => updateField('reminder_at', e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Priority</label>
+              <select
+                value={form.priority}
+                onChange={(e) => updateField('priority', e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Assigned To</label>
+              <input
+                type="text"
+                value={form.assigned_to}
+                onChange={(e) => updateField('assigned_to', e.target.value)}
+                placeholder="Shelby"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving || !form.title.trim()}
+              className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : task ? 'Save Changes' : 'Add Task'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({ task, onToggle, onEdit, onDelete }) {
   const completed = task.status === 'completed';
 
   const priorityStyles = {
@@ -36,7 +219,7 @@ function TaskCard({ task, onToggle, onDelete }) {
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <h3
@@ -75,12 +258,19 @@ function TaskCard({ task, onToggle, onDelete }) {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => onToggle(task)}
             className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             {completed ? 'Reopen' : 'Complete'}
+          </button>
+
+          <button
+            onClick={() => onEdit(task)}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Edit
           </button>
 
           <button
@@ -95,7 +285,7 @@ function TaskCard({ task, onToggle, onDelete }) {
   );
 }
 
-function TaskSection({ title, tasks, emptyText, onToggle, onDelete }) {
+function TaskSection({ title, tasks, emptyText, onToggle, onEdit, onDelete }) {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
@@ -116,6 +306,7 @@ function TaskSection({ title, tasks, emptyText, onToggle, onDelete }) {
               key={task.id}
               task={task}
               onToggle={onToggle}
+              onEdit={onEdit}
               onDelete={onDelete}
             />
           ))}
@@ -129,6 +320,9 @@ function TasksPage() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorText, setErrorText] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   async function loadTasks() {
     setLoading(true);
@@ -149,16 +343,41 @@ function TasksPage() {
     loadTasks();
   }, []);
 
-  async function handleAddTask() {
-    const title = window.prompt('Task title');
-    if (!title?.trim()) return;
+  function handleOpenCreate() {
+    setEditingTask(null);
+    setModalOpen(true);
+  }
+
+  function handleOpenEdit(task) {
+    setEditingTask(task);
+    setModalOpen(true);
+  }
+
+  function handleCloseModal() {
+    if (saving) return;
+    setModalOpen(false);
+    setEditingTask(null);
+  }
+
+  async function handleSaveTask(formData) {
+    setSaving(true);
+    setErrorText('');
 
     try {
-      await addTask({ title: title.trim() });
+      if (editingTask) {
+        await updateTask(editingTask.id, formData);
+      } else {
+        await addTask(formData);
+      }
+
+      setModalOpen(false);
+      setEditingTask(null);
       await loadTasks();
     } catch (error) {
-      console.error('Failed to add task:', error);
-      setErrorText(error?.message || 'Failed to add task');
+      console.error('Failed to save task:', error);
+      setErrorText(error?.message || 'Failed to save task');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -220,7 +439,7 @@ function TasksPage() {
             </div>
 
             <button
-              onClick={handleAddTask}
+              onClick={handleOpenCreate}
               className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
             >
               Add Task
@@ -245,6 +464,7 @@ function TasksPage() {
               tasks={grouped.overdue}
               emptyText="No overdue tasks."
               onToggle={handleToggle}
+              onEdit={handleOpenEdit}
               onDelete={handleDelete}
             />
 
@@ -253,6 +473,7 @@ function TasksPage() {
               tasks={grouped.today}
               emptyText="Nothing due today."
               onToggle={handleToggle}
+              onEdit={handleOpenEdit}
               onDelete={handleDelete}
             />
 
@@ -261,6 +482,7 @@ function TasksPage() {
               tasks={grouped.upcoming}
               emptyText="No upcoming tasks."
               onToggle={handleToggle}
+              onEdit={handleOpenEdit}
               onDelete={handleDelete}
             />
 
@@ -269,11 +491,20 @@ function TasksPage() {
               tasks={grouped.completed}
               emptyText="No completed tasks yet."
               onToggle={handleToggle}
+              onEdit={handleOpenEdit}
               onDelete={handleDelete}
             />
           </div>
         )}
       </div>
+
+      <TaskModal
+        open={modalOpen}
+        onClose={handleCloseModal}
+        onSave={handleSaveTask}
+        task={editingTask}
+        saving={saving}
+      />
     </div>
   );
 }
