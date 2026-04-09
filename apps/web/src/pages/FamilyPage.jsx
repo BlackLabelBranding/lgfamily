@@ -1,44 +1,208 @@
 import React, { useEffect, useState } from 'react';
-import { Helmet } from 'react-helmet';
-import Sidebar from '@/components/Sidebar.jsx';
-import Header from '@/components/Header.jsx';
-import FamilyMemberCard from '@/components/FamilyMemberCard.jsx';
+import { getFamilyMembers, addFamilyMember } from '@/lib/family.js';
+
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Plus } from 'lucide-react';
-import { addFamilyMember, getFamilyMembers } from '@/lib/family.js';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Users } from 'lucide-react';
 
-function FamilyPage() {
-  const [members, setMembers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [open, setOpen] = useState(false);
+function formatBirthDate(value) {
+  if (!value) return null;
+  return new Date(value).toLocaleDateString();
+}
 
+function FamilyModal({ open, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
-    relationship: '',
+    display_name: '',
+    relationship: 'family',
     birth_date: '',
     notes: '',
   });
 
+  useEffect(() => {
+    if (open) {
+      setForm({
+        first_name: '',
+        last_name: '',
+        display_name: '',
+        relationship: 'family',
+        birth_date: '',
+        notes: '',
+      });
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  function updateField(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!form.first_name.trim()) return;
+
+    await onSave({
+      first_name: form.first_name.trim(),
+      last_name: form.last_name.trim() || null,
+      display_name: form.display_name.trim() || form.first_name.trim(),
+      relationship: form.relationship || 'family',
+      birth_date: form.birth_date || null,
+      notes: form.notes.trim() || null,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Add Family Member</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Add someone to your household directory.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">First Name</label>
+              <input
+                type="text"
+                value={form.first_name}
+                onChange={(e) => updateField('first_name', e.target.value)}
+                placeholder="Jacey"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Last Name</label>
+              <input
+                type="text"
+                value={form.last_name}
+                onChange={(e) => updateField('last_name', e.target.value)}
+                placeholder="Garza"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Display Name</label>
+              <input
+                type="text"
+                value={form.display_name}
+                onChange={(e) => updateField('display_name', e.target.value)}
+                placeholder="Jacey"
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Relationship</label>
+              <select
+                value={form.relationship}
+                onChange={(e) => updateField('relationship', e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              >
+                <option value="family">Family</option>
+                <option value="parent">Parent</option>
+                <option value="mom">Mom</option>
+                <option value="dad">Dad</option>
+                <option value="spouse">Spouse</option>
+                <option value="fiance">Fiance</option>
+                <option value="partner">Partner</option>
+                <option value="daughter">Daughter</option>
+                <option value="son">Son</option>
+                <option value="step son">Step Son</option>
+                <option value="step daughter">Step Daughter</option>
+                <option value="sister">Sister</option>
+                <option value="brother">Brother</option>
+                <option value="grandparent">Grandparent</option>
+                <option value="grandmother">Grandmother</option>
+                <option value="grandfather">Grandfather</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-1">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-700">Birth Date</label>
+              <input
+                type="date"
+                value={form.birth_date}
+                onChange={(e) => updateField('birth_date', e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => updateField('notes', e.target.value)}
+              placeholder="Optional notes"
+              rows={4}
+              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving || !form.first_name.trim()}
+              className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : 'Add Member'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function FamilyPage() {
+  const [members, setMembers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorText, setErrorText] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   async function loadMembers() {
+    setLoading(true);
+    setErrorText('');
+
     try {
       const data = await getFamilyMembers();
-      setMembers(data);
-      setError('');
-    } catch (err) {
-      console.error('Error loading family members:', err);
-      setError(err.message || 'Failed to load family members.');
+      setMembers(data || []);
+    } catch (error) {
+      console.error('Failed to load family members:', error);
+      setErrorText(error?.message || 'Failed to load family members');
     } finally {
       setLoading(false);
     }
@@ -48,224 +212,103 @@ function FamilyPage() {
     loadMembers();
   }, []);
 
-  function updateField(field, value) {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  }
-
-  function resetForm() {
-    setForm({
-      first_name: '',
-      last_name: '',
-      relationship: '',
-      birth_date: '',
-      notes: '',
-    });
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    if (!form.first_name.trim()) {
-      setError('First name is required.');
-      return;
-    }
+  async function handleSaveMember(formData) {
+    setSaving(true);
+    setErrorText('');
 
     try {
-      setSaving(true);
-      setError('');
-
-      const displayName = [form.first_name, form.last_name]
-        .filter(Boolean)
-        .join(' ')
-        .trim();
-
-      await addFamilyMember({
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-        display_name: displayName || form.first_name.trim(),
-        relationship: form.relationship.trim() || 'family',
-        birth_date: form.birth_date || null,
-        notes: form.notes.trim() || null,
-      });
-
-      resetForm();
-      setOpen(false);
+      await addFamilyMember(formData);
+      setModalOpen(false);
       await loadMembers();
-    } catch (err) {
-      console.error('Error adding family member:', err);
-      setError(err.message || 'Failed to add family member.');
+    } catch (error) {
+      console.error('Failed to save family member:', error);
+      setErrorText(error?.message || 'Failed to save family member');
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <>
-      <Helmet>
-        <title>Family - FamilyHub</title>
-        <meta name="description" content="Manage family members and contacts" />
-      </Helmet>
-
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex-1 lg:ml-64">
-          <Header />
-          <main className="p-4 sm:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h1
-                    className="text-3xl font-bold mb-2"
-                    style={{ letterSpacing: '-0.02em' }}
-                  >
-                    Family
-                  </h1>
-                  <p className="text-muted-foreground">
-                    Real household members from Supabase
-                  </p>
-                </div>
-
-                <Button
-                  className="gap-2 touch-target"
-                  onClick={() => setOpen(true)}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add member
-                </Button>
-              </div>
-
-              {loading && (
-                <p className="text-muted-foreground">Loading family...</p>
-              )}
-
-              {error && !open && (
-                <p className="text-sm text-red-500 mb-4">{error}</p>
-              )}
-
-              {!loading && !error && members.length === 0 && (
-                <p className="text-muted-foreground">No family members yet.</p>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {members.map((member) => {
-                  const fullName =
-                    member.display_name ||
-                    [member.first_name, member.last_name]
-                      .filter(Boolean)
-                      .join(' ')
-                      .trim();
-
-                  const initials =
-                    `${member.first_name?.[0] || ''}${member.last_name?.[0] || ''}` ||
-                    '?';
-
-                  return (
-                    <FamilyMemberCard
-                      key={member.id}
-                      member={{
-                        name: fullName,
-                        initials,
-                        role: member.relationship || 'family',
-                        email: null,
-                        phone: null,
-                        birthday: member.birth_date || null,
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          </main>
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold mb-2" style={{ letterSpacing: '-0.02em' }}>
+            Family
+          </h1>
+          <p className="text-muted-foreground">Manage your household members</p>
         </div>
+
+        <Button onClick={() => setModalOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Add Member
+        </Button>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add family member</DialogTitle>
-          </DialogHeader>
+      {errorText ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {errorText}
+        </div>
+      ) : null}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && open && (
-              <p className="text-sm text-red-500">{error}</p>
-            )}
+      {loading ? (
+        <div className="text-sm text-muted-foreground">Loading family members...</div>
+      ) : members.length === 0 ? (
+        <div className="text-sm text-muted-foreground">No family members yet.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {members.map((member) => (
+            <Card key={member.id} className="transition-all duration-200 hover:shadow-md">
+              <CardContent className="p-5">
+                <div className="flex items-start gap-4">
+                  <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                    <Users className="h-5 w-5 text-muted-foreground" />
+                  </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="first_name">First name</Label>
-                <Input
-                  id="first_name"
-                  value={form.first_name}
-                  onChange={(e) => updateField('first_name', e.target.value)}
-                  placeholder="Lance"
-                  required
-                />
-              </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <h3 className="font-semibold text-base text-slate-900">
+                        {member.display_name || member.first_name}
+                      </h3>
 
-              <div className="space-y-2">
-                <Label htmlFor="last_name">Last name</Label>
-                <Input
-                  id="last_name"
-                  value={form.last_name}
-                  onChange={(e) => updateField('last_name', e.target.value)}
-                  placeholder="Garza"
-                />
-              </div>
-            </div>
+                      {member.relationship ? (
+                        <Badge variant="secondary" className="text-xs">
+                          {member.relationship}
+                        </Badge>
+                      ) : null}
+                    </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="relationship">Relationship</Label>
-              <Input
-                id="relationship"
-                value={form.relationship}
-                onChange={(e) => updateField('relationship', e.target.value)}
-                placeholder="self, partner, child, mother, father"
-              />
-            </div>
+                    <div className="space-y-1 text-sm text-muted-foreground">
+                      {member.first_name || member.last_name ? (
+                        <p>
+                          Name: {[member.first_name, member.last_name].filter(Boolean).join(' ')}
+                        </p>
+                      ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="birth_date">Birth date</Label>
-              <Input
-                id="birth_date"
-                type="date"
-                value={form.birth_date}
-                onChange={(e) => updateField('birth_date', e.target.value)}
-              />
-            </div>
+                      {member.birth_date ? (
+                        <p>Birthday: {formatBirthDate(member.birth_date)}</p>
+                      ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Input
-                id="notes"
-                value={form.notes}
-                onChange={(e) => updateField('notes', e.target.value)}
-                placeholder="Optional notes"
-              />
-            </div>
+                      {member.notes ? (
+                        <p className="pt-1">{member.notes}</p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setOpen(false);
-                  resetForm();
-                }}
-                disabled={saving}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Saving...' : 'Save member'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+      <FamilyModal
+        open={modalOpen}
+        onClose={() => {
+          if (!saving) setModalOpen(false);
+        }}
+        onSave={handleSaveMember}
+        saving={saving}
+      />
+    </div>
   );
 }
 
