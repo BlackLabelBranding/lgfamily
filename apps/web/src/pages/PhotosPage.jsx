@@ -14,7 +14,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Image as ImageIcon, Users, Calendar, FileText, Pencil, Trash2, X } from 'lucide-react';
+import {
+  Plus,
+  Image as ImageIcon,
+  Users,
+  Calendar,
+  FileText,
+  Pencil,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 
 const initialFamilyMembers = [
   { id: '1', name: 'Shelby' },
@@ -84,6 +93,15 @@ const emptyForm = {
   fileLabel: '',
 };
 
+const emptyBulkForm = {
+  date: '',
+  category: 'Everyday',
+  people: [],
+  type: 'album',
+  description: '',
+  files: [],
+};
+
 function PhotosPage() {
   const [familyMembers] = useState(initialFamilyMembers);
   const [memories, setMemories] = useState(initialMemories);
@@ -91,9 +109,13 @@ function PhotosPage() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+
   const [editingMemory, setEditingMemory] = useState(null);
   const [selectedMemory, setSelectedMemory] = useState(null);
+
   const [formData, setFormData] = useState(emptyForm);
+  const [bulkForm, setBulkForm] = useState(emptyBulkForm);
 
   const [personFilter, setPersonFilter] = useState('All members');
   const [categoryFilter, setCategoryFilter] = useState('All categories');
@@ -131,6 +153,10 @@ function PhotosPage() {
     setEditingMemory(null);
   }
 
+  function resetBulkForm() {
+    setBulkForm(emptyBulkForm);
+  }
+
   function openAddDialog(type = 'album') {
     setEditingMemory(null);
     setFormData({ ...emptyForm, type });
@@ -157,6 +183,11 @@ function PhotosPage() {
     setIsDetailOpen(true);
   }
 
+  function openBulkUploadDialog() {
+    resetBulkForm();
+    setIsBulkUploadOpen(true);
+  }
+
   function handleInputChange(field, value) {
     setFormData((prev) => ({ ...prev, [field]: value }));
   }
@@ -173,9 +204,26 @@ function PhotosPage() {
     });
   }
 
+  function toggleBulkPerson(name) {
+    setBulkForm((prev) => {
+      const exists = prev.people.includes(name);
+      return {
+        ...prev,
+        people: exists
+          ? prev.people.filter((person) => person !== name)
+          : [...prev.people, name],
+      };
+    });
+  }
+
   function handlePhotoUrlChange(e) {
     const value = e.target.value;
     setFormData((prev) => ({ ...prev, photo: value }));
+  }
+
+  function handleBulkFilesChange(e) {
+    const files = Array.from(e.target.files || []);
+    setBulkForm((prev) => ({ ...prev, files }));
   }
 
   function handleSaveMemory(e) {
@@ -208,6 +256,28 @@ function PhotosPage() {
     resetForm();
   }
 
+  function handleBulkUpload(e) {
+    e.preventDefault();
+
+    if (!bulkForm.files.length || !bulkForm.date) return;
+
+    const newItems = bulkForm.files.map((file, index) => ({
+      id: `bulk-${Date.now()}-${index}`,
+      title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
+      description: bulkForm.description.trim(),
+      date: bulkForm.date,
+      category: bulkForm.category,
+      people: bulkForm.people,
+      type: bulkForm.type,
+      photo: URL.createObjectURL(file),
+      fileLabel: '',
+    }));
+
+    setMemories((prev) => [...newItems, ...prev]);
+    setIsBulkUploadOpen(false);
+    resetBulkForm();
+  }
+
   function handleDeleteMemory(id) {
     setMemories((prev) => prev.filter((memory) => memory.id !== id));
     if (selectedMemory?.id === id) {
@@ -234,7 +304,7 @@ function PhotosPage() {
               </div>
             ) : (
               <div
-                className={`${square ? 'aspect-square' : 'aspect-video'} bg-muted overflow-hidden`}
+                className={`${square ? 'aspect-square' : 'aspect-video'} overflow-hidden bg-muted`}
               >
                 {memory.photo ? (
                   <img
@@ -292,7 +362,7 @@ function PhotosPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="gap-1"
+                className="gap-1 rounded-xl"
                 onClick={() => openEditDialog(memory)}
               >
                 <Pencil className="h-3.5 w-3.5" />
@@ -302,7 +372,7 @@ function PhotosPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="gap-1 text-destructive hover:text-destructive"
+                className="gap-1 rounded-xl text-destructive hover:text-destructive"
                 onClick={() => handleDeleteMemory(memory.id)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
@@ -332,17 +402,39 @@ function PhotosPage() {
               <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                 <div>
                   <h1 className="mb-2 text-3xl font-bold tracking-tight">Photos & memories</h1>
-                  <p className="text-muted-foreground">Preserve family moments, milestones, and important records.</p>
+                  <p className="text-muted-foreground">
+                    Preserve family moments, milestones, and important records.
+                  </p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button className="gap-2" onClick={() => openAddDialog('album')}>
+                  <Button
+                    size="sm"
+                    className="gap-2 rounded-xl shadow-sm"
+                    onClick={() => openAddDialog('album')}
+                  >
                     <Plus className="h-4 w-4" />
                     Add memory
                   </Button>
-                  <Button variant="outline" className="gap-2" onClick={() => openAddDialog('scan')}>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 rounded-xl"
+                    onClick={() => openAddDialog('scan')}
+                  >
                     <FileText className="h-4 w-4" />
                     Add scan
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2 rounded-xl"
+                    onClick={openBulkUploadDialog}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Mass upload
                   </Button>
                 </div>
               </div>
@@ -478,10 +570,10 @@ function PhotosPage() {
                                 </div>
 
                                 <div className="flex gap-2">
-                                  <Button variant="outline" size="sm" onClick={() => openDetailDialog(memory)}>
+                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openDetailDialog(memory)}>
                                     View
                                   </Button>
-                                  <Button variant="outline" size="sm" onClick={() => openEditDialog(memory)}>
+                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openEditDialog(memory)}>
                                     Edit
                                   </Button>
                                 </div>
@@ -529,16 +621,16 @@ function PhotosPage() {
                                 </p>
 
                                 <div className="mt-3 flex gap-2">
-                                  <Button variant="outline" size="sm" onClick={() => openDetailDialog(memory)}>
+                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openDetailDialog(memory)}>
                                     View
                                   </Button>
-                                  <Button variant="outline" size="sm" onClick={() => openEditDialog(memory)}>
+                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openEditDialog(memory)}>
                                     Edit
                                   </Button>
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="text-destructive hover:text-destructive"
+                                    className="rounded-xl text-destructive hover:text-destructive"
                                     onClick={() => handleDeleteMemory(memory.id)}
                                   >
                                     Delete
@@ -686,6 +778,7 @@ function PhotosPage() {
               <Button
                 type="button"
                 variant="outline"
+                className="rounded-xl"
                 onClick={() => {
                   setIsFormOpen(false);
                   resetForm();
@@ -693,7 +786,131 @@ function PhotosPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit">{editingMemory ? 'Save changes' : 'Add memory'}</Button>
+              <Button type="submit" className="rounded-xl">
+                {editingMemory ? 'Save changes' : 'Add memory'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isBulkUploadOpen}
+        onOpenChange={(open) => {
+          setIsBulkUploadOpen(open);
+          if (!open) resetBulkForm();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Mass upload photos</DialogTitle>
+            <DialogDescription>
+              Upload multiple photos at once using the same settings.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleBulkUpload} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Date" required>
+                <input
+                  type="date"
+                  value={bulkForm.date}
+                  onChange={(e) => setBulkForm((prev) => ({ ...prev, date: e.target.value }))}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  required
+                />
+              </Field>
+
+              <Field label="Category">
+                <select
+                  value={bulkForm.category}
+                  onChange={(e) => setBulkForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Type">
+                <select
+                  value={bulkForm.type}
+                  onChange={(e) => setBulkForm((prev) => ({ ...prev, type: e.target.value }))}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="album">Album memory</option>
+                  <option value="milestone">Milestone</option>
+                </select>
+              </Field>
+
+              <Field label="Photos" required>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleBulkFilesChange}
+                  className="block w-full text-sm"
+                  required
+                />
+                {bulkForm.files.length > 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {bulkForm.files.length} file(s) selected
+                  </p>
+                ) : null}
+              </Field>
+            </div>
+
+            <Field label="Shared description">
+              <textarea
+                value={bulkForm.description}
+                onChange={(e) => setBulkForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Optional shared description for all uploaded photos"
+                className="min-h-[110px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </Field>
+
+            <Field label="Tagged family members">
+              <div className="flex flex-wrap gap-2">
+                {familyMembers.map((member) => {
+                  const active = bulkForm.people.includes(member.name);
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => toggleBulkPerson(member.name)}
+                      className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs transition ${
+                        active
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border bg-background text-foreground'
+                      }`}
+                    >
+                      {member.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  setIsBulkUploadOpen(false);
+                  resetBulkForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="rounded-xl">
+                Upload all
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -769,12 +986,16 @@ function PhotosPage() {
               </div>
 
               <DialogFooter className="gap-2 sm:gap-0">
-                <Button variant="outline" onClick={() => openEditDialog(selectedMemory)}>
+                <Button
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => openEditDialog(selectedMemory)}
+                >
                   Edit
                 </Button>
                 <Button
                   variant="outline"
-                  className="text-destructive hover:text-destructive"
+                  className="rounded-xl text-destructive hover:text-destructive"
                   onClick={() => handleDeleteMemory(selectedMemory.id)}
                 >
                   Delete
@@ -824,7 +1045,7 @@ function EmptyState({ title, description, actionLabel, onAction }) {
         </div>
         <h3 className="mb-2 text-lg font-semibold">{title}</h3>
         <p className="mb-4 max-w-md text-sm text-muted-foreground">{description}</p>
-        {actionLabel && onAction ? <Button onClick={onAction}>{actionLabel}</Button> : null}
+        {actionLabel && onAction ? <Button className="rounded-xl" onClick={onAction}>{actionLabel}</Button> : null}
       </CardContent>
     </Card>
   );
