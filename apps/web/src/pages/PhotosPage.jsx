@@ -23,6 +23,8 @@ import {
   Pencil,
   Trash2,
   Upload,
+  FolderOpen,
+  ArrowLeft,
 } from 'lucide-react';
 
 const initialFamilyMembers = [
@@ -35,21 +37,70 @@ const initialFamilyMembers = [
   { id: '7', name: 'Kasper' },
 ];
 
+const initialAlbums = [
+  {
+    id: 'a1',
+    name: 'Summer Lake Weekend',
+    description: 'Swimming, grilling, and family time at the lake.',
+    date: '2026-03-18',
+    category: 'Vacation',
+  },
+  {
+    id: 'a2',
+    name: 'Christmas Morning 2025',
+    description: 'Pajamas, presents, and coffee.',
+    date: '2025-12-25',
+    category: 'Holiday',
+  },
+  {
+    id: 'a3',
+    name: 'Zander Milestones',
+    description: 'Big moments and proud achievements.',
+    date: '2026-02-09',
+    category: 'Milestone',
+  },
+];
+
 const initialMemories = [
   {
     id: 'm1',
-    title: 'Summer lake weekend',
-    description: 'A fun family weekend at the lake with swimming, grilling, and late-night laughs.',
+    title: 'Dock sunset',
+    description: 'The lake was calm and the weather was perfect.',
     date: '2026-03-18',
     category: 'Vacation',
     people: ['Shelby', 'Zander', 'Kasper'],
     photo:
       'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80',
     type: 'album',
+    albumId: 'a1',
   },
   {
     id: 'm2',
-    title: 'Zander lost his first tooth',
+    title: 'Family by the water',
+    description: 'Quick picture before dinner.',
+    date: '2026-03-18',
+    category: 'Vacation',
+    people: ['Shelby', 'Zander'],
+    photo:
+      'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1200&q=80',
+    type: 'album',
+    albumId: 'a1',
+  },
+  {
+    id: 'm3',
+    title: 'Christmas morning',
+    description: 'The living room was full and loud in the best way.',
+    date: '2025-12-25',
+    category: 'Holiday',
+    people: ['Shelby', 'Zander', 'Kasper'],
+    photo:
+      'https://images.unsplash.com/photo-1512389098783-66b81f86e199?auto=format&fit=crop&w=1200&q=80',
+    type: 'album',
+    albumId: 'a2',
+  },
+  {
+    id: 'm4',
+    title: 'Lost first tooth',
     description: 'Big milestone day and he was very proud of it.',
     date: '2026-02-09',
     category: 'Milestone',
@@ -57,20 +108,10 @@ const initialMemories = [
     photo:
       'https://images.unsplash.com/photo-1516627145497-ae6968895b74?auto=format&fit=crop&w=1200&q=80',
     type: 'milestone',
+    albumId: 'a3',
   },
   {
-    id: 'm3',
-    title: 'Christmas morning',
-    description: 'Pajamas, gifts, coffee, and a packed living room.',
-    date: '2025-12-25',
-    category: 'Holiday',
-    people: ['Shelby', 'Zander', 'Kasper'],
-    photo:
-      'https://images.unsplash.com/photo-1512389098783-66b81f86e199?auto=format&fit=crop&w=1200&q=80',
-    type: 'album',
-  },
-  {
-    id: 'm4',
+    id: 'm5',
     title: 'School paperwork scanned',
     description: 'Important school form saved for easy access later.',
     date: '2026-04-02',
@@ -79,10 +120,24 @@ const initialMemories = [
     photo: '',
     type: 'scan',
     fileLabel: 'School enrollment form',
+    albumId: '',
   },
 ];
 
-const emptyForm = {
+const categories = [
+  'Birthday',
+  'Holiday',
+  'Vacation',
+  'School',
+  'Milestone',
+  'Everyday',
+  'Document',
+  'Sports',
+  'Anniversary',
+  'Other',
+];
+
+const emptyMemoryForm = {
   title: '',
   description: '',
   date: '',
@@ -91,6 +146,7 @@ const emptyForm = {
   photo: '',
   type: 'album',
   fileLabel: '',
+  albumId: '',
 };
 
 const emptyBulkForm = {
@@ -100,35 +156,42 @@ const emptyBulkForm = {
   type: 'album',
   description: '',
   files: [],
+  albumId: '',
+};
+
+const emptyAlbumForm = {
+  name: '',
+  description: '',
+  date: '',
+  category: 'Everyday',
 };
 
 function PhotosPage() {
   const [familyMembers] = useState(initialFamilyMembers);
+  const [albums, setAlbums] = useState(initialAlbums);
   const [memories, setMemories] = useState(initialMemories);
-  const [activeTab, setActiveTab] = useState('albums');
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('albums');
+  const [selectedAlbumId, setSelectedAlbumId] = useState(null);
+
+  const [isMemoryFormOpen, setIsMemoryFormOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
+  const [isAlbumFormOpen, setIsAlbumFormOpen] = useState(false);
 
   const [editingMemory, setEditingMemory] = useState(null);
   const [selectedMemory, setSelectedMemory] = useState(null);
 
-  const [formData, setFormData] = useState(emptyForm);
+  const [memoryForm, setMemoryForm] = useState(emptyMemoryForm);
   const [bulkForm, setBulkForm] = useState(emptyBulkForm);
+  const [albumForm, setAlbumForm] = useState(emptyAlbumForm);
 
   const [personFilter, setPersonFilter] = useState('All members');
   const [categoryFilter, setCategoryFilter] = useState('All categories');
 
-  const categories = ['Birthday', 'Holiday', 'Vacation', 'School', 'Milestone', 'Everyday', 'Document', 'Other'];
-
   const sortedMemories = useMemo(() => {
     return [...memories].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
   }, [memories]);
-
-  const albums = useMemo(() => {
-    return sortedMemories.filter((memory) => memory.type === 'album');
-  }, [sortedMemories]);
 
   const milestones = useMemo(() => {
     return sortedMemories.filter((memory) => memory.type === 'milestone');
@@ -148,8 +211,31 @@ function PhotosPage() {
     });
   }, [sortedMemories, personFilter, categoryFilter]);
 
-  function resetForm() {
-    setFormData(emptyForm);
+  const albumsWithStats = useMemo(() => {
+    return albums
+      .map((album) => {
+        const albumMemories = memories.filter((memory) => memory.albumId === album.id);
+        const cover = albumMemories.find((memory) => memory.photo)?.photo || '';
+        return {
+          ...album,
+          count: albumMemories.length,
+          cover,
+        };
+      })
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+  }, [albums, memories]);
+
+  const selectedAlbum = useMemo(() => {
+    return albumsWithStats.find((album) => album.id === selectedAlbumId) || null;
+  }, [albumsWithStats, selectedAlbumId]);
+
+  const selectedAlbumMemories = useMemo(() => {
+    if (!selectedAlbumId) return [];
+    return sortedMemories.filter((memory) => memory.albumId === selectedAlbumId);
+  }, [sortedMemories, selectedAlbumId]);
+
+  function resetMemoryForm() {
+    setMemoryForm(emptyMemoryForm);
     setEditingMemory(null);
   }
 
@@ -157,15 +243,24 @@ function PhotosPage() {
     setBulkForm(emptyBulkForm);
   }
 
-  function openAddDialog(type = 'album') {
-    setEditingMemory(null);
-    setFormData({ ...emptyForm, type });
-    setIsFormOpen(true);
+  function resetAlbumForm() {
+    setAlbumForm(emptyAlbumForm);
   }
 
-  function openEditDialog(memory) {
+  function openAddMemoryDialog(type = 'album', albumId = '') {
+    setEditingMemory(null);
+    setMemoryForm({
+      ...emptyMemoryForm,
+      type,
+      albumId: albumId || selectedAlbumId || '',
+      category: type === 'scan' ? 'Document' : type === 'milestone' ? 'Milestone' : 'Everyday',
+    });
+    setIsMemoryFormOpen(true);
+  }
+
+  function openEditMemoryDialog(memory) {
     setEditingMemory(memory);
-    setFormData({
+    setMemoryForm({
       title: memory.title || '',
       description: memory.description || '',
       date: memory.date || '',
@@ -174,8 +269,9 @@ function PhotosPage() {
       photo: memory.photo || '',
       type: memory.type || 'album',
       fileLabel: memory.fileLabel || '',
+      albumId: memory.albumId || '',
     });
-    setIsFormOpen(true);
+    setIsMemoryFormOpen(true);
   }
 
   function openDetailDialog(memory) {
@@ -183,17 +279,26 @@ function PhotosPage() {
     setIsDetailOpen(true);
   }
 
-  function openBulkUploadDialog() {
+  function openBulkUploadDialog(albumId = '') {
     resetBulkForm();
+    setBulkForm((prev) => ({
+      ...prev,
+      albumId: albumId || selectedAlbumId || '',
+    }));
     setIsBulkUploadOpen(true);
   }
 
-  function handleInputChange(field, value) {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  function openAddAlbumDialog() {
+    resetAlbumForm();
+    setIsAlbumFormOpen(true);
   }
 
-  function togglePerson(name) {
-    setFormData((prev) => {
+  function handleMemoryInputChange(field, value) {
+    setMemoryForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function toggleMemoryPerson(name) {
+    setMemoryForm((prev) => {
       const exists = prev.people.includes(name);
       return {
         ...prev,
@@ -216,11 +321,6 @@ function PhotosPage() {
     });
   }
 
-  function handlePhotoUrlChange(e) {
-    const value = e.target.value;
-    setFormData((prev) => ({ ...prev, photo: value }));
-  }
-
   function handleBulkFilesChange(e) {
     const files = Array.from(e.target.files || []);
     setBulkForm((prev) => ({ ...prev, files }));
@@ -229,19 +329,19 @@ function PhotosPage() {
   function handleSaveMemory(e) {
     e.preventDefault();
 
-    if (!formData.title.trim()) return;
-    if (!formData.date) return;
+    if (!memoryForm.title.trim() || !memoryForm.date) return;
 
     const payload = {
       id: editingMemory?.id || `memory-${Date.now()}`,
-      title: formData.title.trim(),
-      description: formData.description.trim(),
-      date: formData.date,
-      category: formData.category,
-      people: formData.people,
-      photo: formData.photo.trim(),
-      type: formData.type,
-      fileLabel: formData.fileLabel.trim(),
+      title: memoryForm.title.trim(),
+      description: memoryForm.description.trim(),
+      date: memoryForm.date,
+      category: memoryForm.category,
+      people: memoryForm.people,
+      photo: memoryForm.photo.trim(),
+      type: memoryForm.type,
+      fileLabel: memoryForm.fileLabel.trim(),
+      albumId: memoryForm.type === 'scan' ? '' : memoryForm.albumId || '',
     };
 
     if (editingMemory) {
@@ -252,8 +352,8 @@ function PhotosPage() {
       setMemories((prev) => [payload, ...prev]);
     }
 
-    setIsFormOpen(false);
-    resetForm();
+    setIsMemoryFormOpen(false);
+    resetMemoryForm();
   }
 
   function handleBulkUpload(e) {
@@ -271,6 +371,7 @@ function PhotosPage() {
       type: bulkForm.type,
       photo: URL.createObjectURL(file),
       fileLabel: '',
+      albumId: bulkForm.albumId || '',
     }));
 
     setMemories((prev) => [...newItems, ...prev]);
@@ -278,11 +379,44 @@ function PhotosPage() {
     resetBulkForm();
   }
 
+  function handleCreateAlbum(e) {
+    e.preventDefault();
+
+    if (!albumForm.name.trim()) return;
+
+    const newAlbumId = `album-${Date.now()}`;
+    const newAlbum = {
+      id: newAlbumId,
+      name: albumForm.name.trim(),
+      description: albumForm.description.trim(),
+      date: albumForm.date || new Date().toISOString().slice(0, 10),
+      category: albumForm.category,
+    };
+
+    setAlbums((prev) => [newAlbum, ...prev]);
+    setSelectedAlbumId(newAlbumId);
+    setIsAlbumFormOpen(false);
+    resetAlbumForm();
+    setActiveTab('albums');
+  }
+
   function handleDeleteMemory(id) {
     setMemories((prev) => prev.filter((memory) => memory.id !== id));
     if (selectedMemory?.id === id) {
-      setIsDetailOpen(false);
       setSelectedMemory(null);
+      setIsDetailOpen(false);
+    }
+  }
+
+  function handleDeleteAlbum(albumId) {
+    setMemories((prev) =>
+      prev.map((memory) =>
+        memory.albumId === albumId ? { ...memory, albumId: '' } : memory
+      )
+    );
+    setAlbums((prev) => prev.filter((album) => album.id !== albumId));
+    if (selectedAlbumId === albumId) {
+      setSelectedAlbumId(null);
     }
   }
 
@@ -303,9 +437,7 @@ function PhotosPage() {
                 <FileText className="h-12 w-12 text-muted-foreground" />
               </div>
             ) : (
-              <div
-                className={`${square ? 'aspect-square' : 'aspect-video'} overflow-hidden bg-muted`}
-              >
+              <div className={`${square ? 'aspect-square' : 'aspect-video'} overflow-hidden bg-muted`}>
                 {memory.photo ? (
                   <img
                     src={memory.photo}
@@ -340,10 +472,6 @@ function PhotosPage() {
               </p>
             ) : null}
 
-            {memory.fileLabel ? (
-              <p className="mb-3 text-xs text-muted-foreground">{memory.fileLabel}</p>
-            ) : null}
-
             <div className="mb-3 flex flex-wrap gap-1">
               {memory.people.slice(0, 3).map((person) => (
                 <Badge key={`${memory.id}-${person}`} variant="outline" className="text-[11px]">
@@ -363,7 +491,7 @@ function PhotosPage() {
                 variant="outline"
                 size="sm"
                 className="gap-1 rounded-xl"
-                onClick={() => openEditDialog(memory)}
+                onClick={() => openEditMemoryDialog(memory)}
               >
                 <Pencil className="h-3.5 w-3.5" />
                 Edit
@@ -389,7 +517,10 @@ function PhotosPage() {
     <>
       <Helmet>
         <title>Photos & Memories - FamilyHub</title>
-        <meta name="description" content="Family photos, memories, milestones, and scanned documents" />
+        <meta
+          name="description"
+          content="Family photos, memories, milestones, and scanned documents"
+        />
       </Helmet>
 
       <div className="flex min-h-screen bg-background">
@@ -403,7 +534,7 @@ function PhotosPage() {
                 <div>
                   <h1 className="mb-2 text-3xl font-bold tracking-tight">Photos & memories</h1>
                   <p className="text-muted-foreground">
-                    Preserve family moments, milestones, and important records.
+                    Preserve family moments, albums, milestones, and important records.
                   </p>
                 </div>
 
@@ -411,7 +542,7 @@ function PhotosPage() {
                   <Button
                     size="sm"
                     className="gap-2 rounded-xl shadow-sm"
-                    onClick={() => openAddDialog('album')}
+                    onClick={() => openAddMemoryDialog('album')}
                   >
                     <Plus className="h-4 w-4" />
                     Add memory
@@ -421,17 +552,17 @@ function PhotosPage() {
                     size="sm"
                     variant="outline"
                     className="gap-2 rounded-xl"
-                    onClick={() => openAddDialog('scan')}
+                    onClick={openAddAlbumDialog}
                   >
-                    <FileText className="h-4 w-4" />
-                    Add scan
+                    <FolderOpen className="h-4 w-4" />
+                    New album
                   </Button>
 
                   <Button
                     size="sm"
                     variant="outline"
                     className="gap-2 rounded-xl"
-                    onClick={openBulkUploadDialog}
+                    onClick={() => openBulkUploadDialog()}
                   >
                     <Upload className="h-4 w-4" />
                     Mass upload
@@ -440,10 +571,26 @@ function PhotosPage() {
               </div>
 
               <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard icon={<ImageIcon className="h-5 w-5 text-muted-foreground" />} label="Albums" value={albums.length} />
-                <StatCard icon={<Calendar className="h-5 w-5 text-muted-foreground" />} label="Milestones" value={milestones.length} />
-                <StatCard icon={<FileText className="h-5 w-5 text-muted-foreground" />} label="Scans" value={scans.length} />
-                <StatCard icon={<Users className="h-5 w-5 text-muted-foreground" />} label="Tagged members" value={familyMembers.length} />
+                <StatCard
+                  icon={<FolderOpen className="h-5 w-5 text-muted-foreground" />}
+                  label="Albums"
+                  value={albums.length}
+                />
+                <StatCard
+                  icon={<ImageIcon className="h-5 w-5 text-muted-foreground" />}
+                  label="Memories"
+                  value={memories.filter((item) => item.type !== 'scan').length}
+                />
+                <StatCard
+                  icon={<Calendar className="h-5 w-5 text-muted-foreground" />}
+                  label="Milestones"
+                  value={milestones.length}
+                />
+                <StatCard
+                  icon={<FileText className="h-5 w-5 text-muted-foreground" />}
+                  label="Scans"
+                  value={scans.length}
+                />
               </div>
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -463,17 +610,176 @@ function PhotosPage() {
                 </TabsList>
 
                 <TabsContent value="albums" className="space-y-4">
-                  {albums.length ? (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {albums.map((memory) => renderMemoryCard(memory))}
-                    </div>
+                  {!selectedAlbum ? (
+                    <>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-semibold">Albums</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Create albums from the front end and group memories together.
+                          </p>
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2 rounded-xl"
+                          onClick={openAddAlbumDialog}
+                        >
+                          <Plus className="h-4 w-4" />
+                          New album
+                        </Button>
+                      </div>
+
+                      {albumsWithStats.length ? (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {albumsWithStats.map((album) => (
+                            <Card
+                              key={album.id}
+                              className="overflow-hidden rounded-2xl shadow-sm transition-all duration-200 hover:shadow-lg"
+                            >
+                              <CardContent className="p-0">
+                                <button
+                                  type="button"
+                                  className="block w-full text-left"
+                                  onClick={() => setSelectedAlbumId(album.id)}
+                                >
+                                  <div className="aspect-video overflow-hidden bg-muted">
+                                    {album.cover ? (
+                                      <img
+                                        src={album.cover}
+                                        alt={album.name}
+                                        className="h-full w-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-full w-full items-center justify-center">
+                                        <FolderOpen className="h-12 w-12 text-muted-foreground" />
+                                      </div>
+                                    )}
+                                  </div>
+                                </button>
+
+                                <div className="p-4">
+                                  <div className="mb-2 flex items-start justify-between gap-3">
+                                    <div>
+                                      <h4 className="font-semibold text-sm">{album.name}</h4>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {formatDisplayDate(album.date)}
+                                      </p>
+                                    </div>
+                                    <Badge variant="secondary" className="text-[11px]">
+                                      {album.category}
+                                    </Badge>
+                                  </div>
+
+                                  {album.description ? (
+                                    <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                                      {album.description}
+                                    </p>
+                                  ) : null}
+
+                                  <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
+                                    <span>{album.count} item{album.count === 1 ? '' : 's'}</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl"
+                                      onClick={() => setSelectedAlbumId(album.id)}
+                                    >
+                                      Open
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="rounded-xl text-destructive hover:text-destructive"
+                                      onClick={() => handleDeleteAlbum(album.id)}
+                                    >
+                                      Delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState
+                          title="No albums yet"
+                          description="Create your first album to organize family memories."
+                          actionLabel="New album"
+                          onAction={openAddAlbumDialog}
+                        />
+                      )}
+                    </>
                   ) : (
-                    <EmptyState
-                      title="No photo memories yet"
-                      description="Add your first family memory to start building your archive."
-                      actionLabel="Add memory"
-                      onAction={() => openAddDialog('album')}
-                    />
+                    <>
+                      <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                          <div className="min-w-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="mb-2 gap-2 px-0 hover:bg-transparent"
+                              onClick={() => setSelectedAlbumId(null)}
+                            >
+                              <ArrowLeft className="h-4 w-4" />
+                              Back to albums
+                            </Button>
+
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              <h3 className="text-xl font-semibold">{selectedAlbum.name}</h3>
+                              <Badge variant="secondary">{selectedAlbum.category}</Badge>
+                            </div>
+
+                            <p className="mb-2 text-sm text-muted-foreground">
+                              {selectedAlbum.description || 'No description yet.'}
+                            </p>
+
+                            <p className="text-xs text-muted-foreground">
+                              {formatDisplayDate(selectedAlbum.date)} • {selectedAlbum.count} item
+                              {selectedAlbum.count === 1 ? '' : 's'}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              className="gap-2 rounded-xl"
+                              onClick={() => openAddMemoryDialog('album', selectedAlbum.id)}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add memory
+                            </Button>
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-2 rounded-xl"
+                              onClick={() => openBulkUploadDialog(selectedAlbum.id)}
+                            >
+                              <Upload className="h-4 w-4" />
+                              Mass upload
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {selectedAlbumMemories.length ? (
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                          {selectedAlbumMemories.map((memory) => renderMemoryCard(memory))}
+                        </div>
+                      ) : (
+                        <EmptyState
+                          title="This album is empty"
+                          description="Add a memory or use mass upload to fill this album."
+                          actionLabel="Add memory"
+                          onAction={() => openAddMemoryDialog('album', selectedAlbum.id)}
+                        />
+                      )}
+                    </>
                   )}
                 </TabsContent>
 
@@ -538,7 +844,10 @@ function PhotosPage() {
                   {milestones.length ? (
                     <div className="space-y-4">
                       {milestones.map((memory) => (
-                        <Card key={memory.id} className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
+                        <Card
+                          key={memory.id}
+                          className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md"
+                        >
                           <CardContent className="p-4">
                             <div className="flex items-start gap-4">
                               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -558,22 +867,38 @@ function PhotosPage() {
                                 </p>
 
                                 {memory.description ? (
-                                  <p className="mb-3 text-sm text-muted-foreground">{memory.description}</p>
+                                  <p className="mb-3 text-sm text-muted-foreground">
+                                    {memory.description}
+                                  </p>
                                 ) : null}
 
                                 <div className="mb-3 flex flex-wrap gap-1">
                                   {memory.people.map((person) => (
-                                    <Badge key={`${memory.id}-${person}`} variant="outline" className="text-[11px]">
+                                    <Badge
+                                      key={`${memory.id}-${person}`}
+                                      variant="outline"
+                                      className="text-[11px]"
+                                    >
                                       {person}
                                     </Badge>
                                   ))}
                                 </div>
 
                                 <div className="flex gap-2">
-                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openDetailDialog(memory)}>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() => openDetailDialog(memory)}
+                                  >
                                     View
                                   </Button>
-                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openEditDialog(memory)}>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() => openEditMemoryDialog(memory)}
+                                  >
                                     Edit
                                   </Button>
                                 </div>
@@ -588,7 +913,7 @@ function PhotosPage() {
                       title="No milestones yet"
                       description="Capture big family moments like birthdays, first days, and achievements."
                       actionLabel="Add milestone"
-                      onAction={() => openAddDialog('milestone')}
+                      onAction={() => openAddMemoryDialog('milestone')}
                     />
                   )}
                 </TabsContent>
@@ -597,7 +922,10 @@ function PhotosPage() {
                   {scans.length ? (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {scans.map((memory) => (
-                        <Card key={memory.id} className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
+                        <Card
+                          key={memory.id}
+                          className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md"
+                        >
                           <CardContent className="p-4">
                             <div className="flex items-start gap-3">
                               <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
@@ -613,7 +941,9 @@ function PhotosPage() {
                                 </div>
 
                                 {memory.fileLabel ? (
-                                  <p className="text-xs text-muted-foreground">{memory.fileLabel}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {memory.fileLabel}
+                                  </p>
                                 ) : null}
 
                                 <p className="mt-1 text-xs text-muted-foreground">
@@ -621,10 +951,20 @@ function PhotosPage() {
                                 </p>
 
                                 <div className="mt-3 flex gap-2">
-                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openDetailDialog(memory)}>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() => openDetailDialog(memory)}
+                                  >
                                     View
                                   </Button>
-                                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => openEditDialog(memory)}>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() => openEditMemoryDialog(memory)}
+                                  >
                                     Edit
                                   </Button>
                                   <Button
@@ -647,7 +987,7 @@ function PhotosPage() {
                       title="No saved scans yet"
                       description="Store important family documents, forms, and records here."
                       actionLabel="Add scan"
-                      onAction={() => openAddDialog('scan')}
+                      onAction={() => openAddMemoryDialog('scan')}
                     />
                   )}
                 </TabsContent>
@@ -658,10 +998,92 @@ function PhotosPage() {
       </div>
 
       <Dialog
-        open={isFormOpen}
+        open={isAlbumFormOpen}
         onOpenChange={(open) => {
-          setIsFormOpen(open);
-          if (!open) resetForm();
+          setIsAlbumFormOpen(open);
+          if (!open) resetAlbumForm();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>New album</DialogTitle>
+            <DialogDescription>
+              Create a new album from the front end and start adding memories into it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreateAlbum} className="space-y-5">
+            <Field label="Album name" required>
+              <input
+                value={albumForm.name}
+                onChange={(e) => setAlbumForm((prev) => ({ ...prev, name: e.target.value }))}
+                placeholder="Example: Summer 2026"
+                className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                required
+              />
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Date">
+                <input
+                  type="date"
+                  value={albumForm.date}
+                  onChange={(e) => setAlbumForm((prev) => ({ ...prev, date: e.target.value }))}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                />
+              </Field>
+
+              <Field label="Category">
+                <select
+                  value={albumForm.category}
+                  onChange={(e) => setAlbumForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Description">
+              <textarea
+                value={albumForm.description}
+                onChange={(e) =>
+                  setAlbumForm((prev) => ({ ...prev, description: e.target.value }))
+                }
+                placeholder="Optional description for this album"
+                className="min-h-[110px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </Field>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  setIsAlbumFormOpen(false);
+                  resetAlbumForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="rounded-xl">
+                Create album
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isMemoryFormOpen}
+        onOpenChange={(open) => {
+          setIsMemoryFormOpen(open);
+          if (!open) resetMemoryForm();
         }}
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -676,8 +1098,8 @@ function PhotosPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Title" required>
                 <input
-                  value={formData.title}
-                  onChange={(e) => handleInputChange('title', e.target.value)}
+                  value={memoryForm.title}
+                  onChange={(e) => handleMemoryInputChange('title', e.target.value)}
                   placeholder="Memory title"
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                   required
@@ -687,8 +1109,8 @@ function PhotosPage() {
               <Field label="Date" required>
                 <input
                   type="date"
-                  value={formData.date}
-                  onChange={(e) => handleInputChange('date', e.target.value)}
+                  value={memoryForm.date}
+                  onChange={(e) => handleMemoryInputChange('date', e.target.value)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                   required
                 />
@@ -698,8 +1120,8 @@ function PhotosPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Type">
                 <select
-                  value={formData.type}
-                  onChange={(e) => handleInputChange('type', e.target.value)}
+                  value={memoryForm.type}
+                  onChange={(e) => handleMemoryInputChange('type', e.target.value)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 >
                   <option value="album">Album memory</option>
@@ -710,8 +1132,8 @@ function PhotosPage() {
 
               <Field label="Category">
                 <select
-                  value={formData.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
+                  value={memoryForm.category}
+                  onChange={(e) => handleMemoryInputChange('category', e.target.value)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 >
                   {categories.map((category) => (
@@ -723,20 +1145,48 @@ function PhotosPage() {
               </Field>
             </div>
 
+            {memoryForm.type !== 'scan' ? (
+              <Field label="Album">
+                <div className="flex gap-2">
+                  <select
+                    value={memoryForm.albumId}
+                    onChange={(e) => handleMemoryInputChange('albumId', e.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">No album</option>
+                    {albumsWithStats.map((album) => (
+                      <option key={album.id} value={album.id}>
+                        {album.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={openAddAlbumDialog}
+                  >
+                    New
+                  </Button>
+                </div>
+              </Field>
+            ) : null}
+
             <Field label="Description">
               <textarea
-                value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
+                value={memoryForm.description}
+                onChange={(e) => handleMemoryInputChange('description', e.target.value)}
                 placeholder="Add the story behind this memory"
                 className="min-h-[110px] w-full rounded-md border bg-background px-3 py-2 text-sm"
               />
             </Field>
 
-            {formData.type === 'scan' ? (
+            {memoryForm.type === 'scan' ? (
               <Field label="Document label">
                 <input
-                  value={formData.fileLabel}
-                  onChange={(e) => handleInputChange('fileLabel', e.target.value)}
+                  value={memoryForm.fileLabel}
+                  onChange={(e) => handleMemoryInputChange('fileLabel', e.target.value)}
                   placeholder="Example: Birth certificate, school form, insurance card"
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 />
@@ -744,8 +1194,8 @@ function PhotosPage() {
             ) : (
               <Field label="Photo URL">
                 <input
-                  value={formData.photo}
-                  onChange={handlePhotoUrlChange}
+                  value={memoryForm.photo}
+                  onChange={(e) => handleMemoryInputChange('photo', e.target.value)}
                   placeholder="Paste image URL for now"
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 />
@@ -755,12 +1205,12 @@ function PhotosPage() {
             <Field label="Tagged family members">
               <div className="flex flex-wrap gap-2">
                 {familyMembers.map((member) => {
-                  const active = formData.people.includes(member.name);
+                  const active = memoryForm.people.includes(member.name);
                   return (
                     <button
                       key={member.id}
                       type="button"
-                      onClick={() => togglePerson(member.name)}
+                      onClick={() => toggleMemoryPerson(member.name)}
                       className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs transition ${
                         active
                           ? 'border-primary bg-primary text-primary-foreground'
@@ -780,8 +1230,8 @@ function PhotosPage() {
                 variant="outline"
                 className="rounded-xl"
                 onClick={() => {
-                  setIsFormOpen(false);
-                  resetForm();
+                  setIsMemoryFormOpen(false);
+                  resetMemoryForm();
                 }}
               >
                 Cancel
@@ -805,7 +1255,7 @@ function PhotosPage() {
           <DialogHeader>
             <DialogTitle>Mass upload photos</DialogTitle>
             <DialogDescription>
-              Upload multiple photos at once using the same settings.
+              Upload multiple photos at once using the same settings and album.
             </DialogDescription>
           </DialogHeader>
 
@@ -848,27 +1298,39 @@ function PhotosPage() {
                 </select>
               </Field>
 
-              <Field label="Photos" required>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleBulkFilesChange}
-                  className="block w-full text-sm"
-                  required
-                />
-                {bulkForm.files.length > 0 ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {bulkForm.files.length} file(s) selected
-                  </p>
-                ) : null}
+              <Field label="Album">
+                <div className="flex gap-2">
+                  <select
+                    value={bulkForm.albumId}
+                    onChange={(e) => setBulkForm((prev) => ({ ...prev, albumId: e.target.value }))}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option value="">No album</option>
+                    {albumsWithStats.map((album) => (
+                      <option key={album.id} value={album.id}>
+                        {album.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={openAddAlbumDialog}
+                  >
+                    New
+                  </Button>
+                </div>
               </Field>
             </div>
 
             <Field label="Shared description">
               <textarea
                 value={bulkForm.description}
-                onChange={(e) => setBulkForm((prev) => ({ ...prev, description: e.target.value }))}
+                onChange={(e) =>
+                  setBulkForm((prev) => ({ ...prev, description: e.target.value }))
+                }
                 placeholder="Optional shared description for all uploaded photos"
                 className="min-h-[110px] w-full rounded-md border bg-background px-3 py-2 text-sm"
               />
@@ -894,6 +1356,22 @@ function PhotosPage() {
                   );
                 })}
               </div>
+            </Field>
+
+            <Field label="Photos" required>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={handleBulkFilesChange}
+                className="block w-full text-sm"
+                required
+              />
+              {bulkForm.files.length > 0 ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {bulkForm.files.length} file(s) selected
+                </p>
+              ) : null}
             </Field>
 
             <DialogFooter className="gap-2 sm:gap-0">
@@ -954,6 +1432,17 @@ function PhotosPage() {
               )}
 
               <div className="space-y-4">
+                {selectedMemory.albumId ? (
+                  <div>
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Album
+                    </p>
+                    <p className="text-sm">
+                      {albums.find((album) => album.id === selectedMemory.albumId)?.name || 'Unknown'}
+                    </p>
+                  </div>
+                ) : null}
+
                 {selectedMemory.description ? (
                   <p className="text-sm text-muted-foreground">{selectedMemory.description}</p>
                 ) : null}
@@ -989,7 +1478,7 @@ function PhotosPage() {
                 <Button
                   variant="outline"
                   className="rounded-xl"
-                  onClick={() => openEditDialog(selectedMemory)}
+                  onClick={() => openEditMemoryDialog(selectedMemory)}
                 >
                   Edit
                 </Button>
@@ -1045,7 +1534,11 @@ function EmptyState({ title, description, actionLabel, onAction }) {
         </div>
         <h3 className="mb-2 text-lg font-semibold">{title}</h3>
         <p className="mb-4 max-w-md text-sm text-muted-foreground">{description}</p>
-        {actionLabel && onAction ? <Button className="rounded-xl" onClick={onAction}>{actionLabel}</Button> : null}
+        {actionLabel && onAction ? (
+          <Button className="rounded-xl" onClick={onAction}>
+            {actionLabel}
+          </Button>
+        ) : null}
       </CardContent>
     </Card>
   );
