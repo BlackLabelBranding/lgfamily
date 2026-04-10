@@ -1,7 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import Sidebar from '@/components/Sidebar.jsx';
-import Header from '@/components/Header.jsx';
 import { supabase } from '@/lib/supabaseClient.js';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -292,102 +290,93 @@ function VaultPage() {
         />
       </Helmet>
 
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex-1 lg:ml-64">
-          <Header />
+      <div className="space-y-6">
+        <div className="flex justify-end">
+          <Button
+            className="gap-2 rounded-xl shadow-sm"
+            onClick={() => {
+              resetForm();
+              setIsAddOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            Add document
+          </Button>
+        </div>
 
-          <main className="p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-7xl">
-              <div className="mb-6 flex justify-end">
-                <Button
-                  className="gap-2 rounded-xl shadow-sm"
-                  onClick={() => {
+        {(errorMessage || successMessage) && (
+          <div className="space-y-2">
+            {errorMessage ? (
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+                {errorMessage}
+              </div>
+            ) : null}
+
+            {successMessage ? (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
+                {successMessage}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="space-y-6"
+        >
+          <TabsList className="grid h-auto w-full grid-cols-2 rounded-2xl bg-muted p-1 sm:grid-cols-4 lg:grid-cols-7">
+            {CATEGORY_TABS.map((category) => (
+              <TabsTrigger
+                key={category}
+                value={category}
+                className="rounded-xl text-xs sm:text-sm"
+              >
+                {category}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {CATEGORY_TABS.map((category) => (
+            <TabsContent
+              key={category}
+              value={category}
+              className="space-y-4"
+            >
+              {isLoading ? (
+                <Card className="rounded-3xl shadow-sm">
+                  <CardContent className="p-12 text-center text-sm text-muted-foreground">
+                    Loading documents...
+                  </CardContent>
+                </Card>
+              ) : documentsByCategory[category]?.length ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {documentsByCategory[category].map((doc) => (
+                    <VaultDocumentCard
+                      key={doc.id}
+                      document={doc}
+                      onView={() => handleViewDocument(doc)}
+                      onDownload={() => handleDownloadDocument(doc)}
+                      onDelete={() => openDeleteDialog(doc)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyVaultState
+                  category={category}
+                  onAdd={() => {
                     resetForm();
+                    setFormData((prev) => ({
+                      ...prev,
+                      category,
+                    }));
                     setIsAddOpen(true);
                   }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add document
-                </Button>
-              </div>
-
-              {(errorMessage || successMessage) && (
-                <div className="mb-6 space-y-2">
-                  {errorMessage ? (
-                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700">
-                      {errorMessage}
-                    </div>
-                  ) : null}
-
-                  {successMessage ? (
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
-                      {successMessage}
-                    </div>
-                  ) : null}
-                </div>
+                />
               )}
-
-              <Tabs
-                value={activeTab}
-                onValueChange={setActiveTab}
-                className="space-y-6"
-              >
-                <TabsList className="grid h-auto w-full grid-cols-2 rounded-2xl bg-muted p-1 sm:grid-cols-4 lg:grid-cols-7">
-                  {CATEGORY_TABS.map((category) => (
-                    <TabsTrigger
-                      key={category}
-                      value={category}
-                      className="rounded-xl text-xs sm:text-sm"
-                    >
-                      {category}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                {CATEGORY_TABS.map((category) => (
-                  <TabsContent
-                    key={category}
-                    value={category}
-                    className="space-y-4"
-                  >
-                    {isLoading ? (
-                      <Card className="rounded-3xl shadow-sm">
-                        <CardContent className="p-12 text-center text-sm text-muted-foreground">
-                          Loading documents...
-                        </CardContent>
-                      </Card>
-                    ) : documentsByCategory[category]?.length ? (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        {documentsByCategory[category].map((doc) => (
-                          <VaultDocumentCard
-                            key={doc.id}
-                            document={doc}
-                            onView={() => handleViewDocument(doc)}
-                            onDownload={() => handleDownloadDocument(doc)}
-                            onDelete={() => openDeleteDialog(doc)}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyVaultState
-                        category={category}
-                        onAdd={() => {
-                          resetForm();
-                          setFormData((prev) => ({
-                            ...prev,
-                            category,
-                          }));
-                          setIsAddOpen(true);
-                        }}
-                      />
-                    )}
-                  </TabsContent>
-                ))}
-              </Tabs>
-            </div>
-          </main>
-        </div>
+            </TabsContent>
+          ))}
+        </Tabs>
       </div>
 
       <Dialog
