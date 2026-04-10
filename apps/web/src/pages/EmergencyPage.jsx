@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import EmergencyContactCard from '@/components/EmergencyContactCard.jsx';
-import { supabase } from '@/lib/supabaseClient.js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,8 +26,27 @@ import {
   Scale,
   Loader2,
 } from 'lucide-react';
-
-const DEV_HOUSEHOLD_ID = 'd2b8464e-a258-46a0-89de-a1b921062943';
+import {
+  getEmergencyData,
+  addEmergencyContact,
+  updateEmergencyContact,
+  deleteEmergencyContact,
+  addEmergencyDoctor,
+  updateEmergencyDoctor,
+  deleteEmergencyDoctor,
+  addEmergencyMedication,
+  updateEmergencyMedication,
+  deleteEmergencyMedication,
+  addEmergencyInsuranceCard,
+  updateEmergencyInsuranceCard,
+  deleteEmergencyInsuranceCard,
+  addEmergencyLegalDirective,
+  updateEmergencyLegalDirective,
+  deleteEmergencyLegalDirective,
+  addEmergencyChecklistItem,
+  toggleEmergencyChecklistItem,
+  deleteEmergencyChecklistItem,
+} from '@/lib/emergency.js';
 
 const emptyContactForm = {
   name: '',
@@ -116,80 +134,13 @@ function EmergencyPage() {
     setErrorText('');
 
     try {
-      const [
-        contactsRes,
-        doctorsRes,
-        medsRes,
-        insuranceRes,
-        legalRes,
-        checklistRes,
-      ] = await Promise.all([
-        supabase
-          .from('emergency_contacts')
-          .select('*')
-          .eq('household_id', DEV_HOUSEHOLD_ID)
-          .order('created_at', { ascending: false }),
-
-        supabase
-          .from('emergency_doctors')
-          .select('*')
-          .eq('household_id', DEV_HOUSEHOLD_ID)
-          .order('created_at', { ascending: false }),
-
-        supabase
-          .from('emergency_medications')
-          .select('*')
-          .eq('household_id', DEV_HOUSEHOLD_ID)
-          .order('created_at', { ascending: false }),
-
-        supabase
-          .from('emergency_insurance_cards')
-          .select('*')
-          .eq('household_id', DEV_HOUSEHOLD_ID)
-          .order('created_at', { ascending: false }),
-
-        supabase
-          .from('emergency_legal_directives')
-          .select('*')
-          .eq('household_id', DEV_HOUSEHOLD_ID)
-          .order('created_at', { ascending: false }),
-
-        supabase
-          .from('emergency_checklist_items')
-          .select('*')
-          .eq('household_id', DEV_HOUSEHOLD_ID)
-          .order('created_at', { ascending: true }),
-      ]);
-
-      const results = [
-        contactsRes,
-        doctorsRes,
-        medsRes,
-        insuranceRes,
-        legalRes,
-        checklistRes,
-      ];
-
-      const firstError = results.find((r) => r.error)?.error;
-      if (firstError) throw firstError;
-
-      setEmergencyContacts(contactsRes.data ?? []);
-      setDoctors(doctorsRes.data ?? []);
-      setMedications(medsRes.data ?? []);
-      setInsuranceCards(
-        (insuranceRes.data ?? []).map((item) => ({
-          ...item,
-          policyNumber: item.policy_number ?? '',
-          groupNumber: item.group_number ?? '',
-        }))
-      );
-      setLegalDirectives(
-        (legalRes.data ?? []).map((item) => ({
-          ...item,
-          lastUpdated: item.last_updated ?? '',
-        }))
-      );
-      setCriticalChecklist(checklistRes.data ?? []);
+      const data = await getEmergencyData();
+      setEmergencyContacts(data.contacts || []);
+      setDoctors(data.doctors || []);
+      setMedications(data.medications || []);
+      setInsuranceCards(data.insuranceCards || []);
+      setLegalDirectives(data.legalDirectives || []);
+      setCriticalChecklist(data.checklistItems || []);
     } catch (error) {
       console.error('Failed to load emergency info:', error);
       setErrorText(error?.message || 'Failed to load emergency info.');
@@ -331,30 +282,17 @@ function EmergencyPage() {
     setErrorText('');
     setSuccessText('');
 
-    const payload = {
-      household_id: DEV_HOUSEHOLD_ID,
-      name: contactForm.name.trim(),
-      relationship: contactForm.relationship.trim() || null,
-      phone: contactForm.phone.trim() || null,
-      email: contactForm.email.trim() || null,
-      address: contactForm.address.trim() || null,
-    };
-
     try {
       if (editingContact?.id) {
-        const { error } = await supabase
-          .from('emergency_contacts')
-          .update(payload)
-          .eq('id', editingContact.id);
-        if (error) throw error;
+        await updateEmergencyContact(editingContact.id, contactForm);
+        setSuccessText('Contact updated.');
       } else {
-        const { error } = await supabase.from('emergency_contacts').insert(payload);
-        if (error) throw error;
+        await addEmergencyContact(contactForm);
+        setSuccessText('Contact added.');
       }
 
       setContactDialogOpen(false);
       resetContactForm();
-      setSuccessText(editingContact ? 'Contact updated.' : 'Contact added.');
       await loadEmergencyData();
     } catch (error) {
       setErrorText(error?.message || 'Failed to save contact.');
@@ -371,29 +309,17 @@ function EmergencyPage() {
     setErrorText('');
     setSuccessText('');
 
-    const payload = {
-      household_id: DEV_HOUSEHOLD_ID,
-      name: doctorForm.name.trim(),
-      specialty: doctorForm.specialty.trim() || null,
-      phone: doctorForm.phone.trim() || null,
-      address: doctorForm.address.trim() || null,
-    };
-
     try {
       if (editingDoctor?.id) {
-        const { error } = await supabase
-          .from('emergency_doctors')
-          .update(payload)
-          .eq('id', editingDoctor.id);
-        if (error) throw error;
+        await updateEmergencyDoctor(editingDoctor.id, doctorForm);
+        setSuccessText('Doctor updated.');
       } else {
-        const { error } = await supabase.from('emergency_doctors').insert(payload);
-        if (error) throw error;
+        await addEmergencyDoctor(doctorForm);
+        setSuccessText('Doctor added.');
       }
 
       setDoctorDialogOpen(false);
       resetDoctorForm();
-      setSuccessText(editingDoctor ? 'Doctor updated.' : 'Doctor added.');
       await loadEmergencyData();
     } catch (error) {
       setErrorText(error?.message || 'Failed to save doctor.');
@@ -410,29 +336,17 @@ function EmergencyPage() {
     setErrorText('');
     setSuccessText('');
 
-    const payload = {
-      household_id: DEV_HOUSEHOLD_ID,
-      name: medicationForm.name.trim(),
-      person: medicationForm.person.trim() || null,
-      dosage: medicationForm.dosage.trim() || null,
-      prescriber: medicationForm.prescriber.trim() || null,
-    };
-
     try {
       if (editingMedication?.id) {
-        const { error } = await supabase
-          .from('emergency_medications')
-          .update(payload)
-          .eq('id', editingMedication.id);
-        if (error) throw error;
+        await updateEmergencyMedication(editingMedication.id, medicationForm);
+        setSuccessText('Medication updated.');
       } else {
-        const { error } = await supabase.from('emergency_medications').insert(payload);
-        if (error) throw error;
+        await addEmergencyMedication(medicationForm);
+        setSuccessText('Medication added.');
       }
 
       setMedicationDialogOpen(false);
       resetMedicationForm();
-      setSuccessText(editingMedication ? 'Medication updated.' : 'Medication added.');
       await loadEmergencyData();
     } catch (error) {
       setErrorText(error?.message || 'Failed to save medication.');
@@ -449,29 +363,17 @@ function EmergencyPage() {
     setErrorText('');
     setSuccessText('');
 
-    const payload = {
-      household_id: DEV_HOUSEHOLD_ID,
-      type: insuranceForm.type.trim(),
-      provider: insuranceForm.provider.trim() || null,
-      policy_number: insuranceForm.policyNumber.trim() || null,
-      group_number: insuranceForm.groupNumber.trim() || null,
-    };
-
     try {
       if (editingInsurance?.id) {
-        const { error } = await supabase
-          .from('emergency_insurance_cards')
-          .update(payload)
-          .eq('id', editingInsurance.id);
-        if (error) throw error;
+        await updateEmergencyInsuranceCard(editingInsurance.id, insuranceForm);
+        setSuccessText('Insurance card updated.');
       } else {
-        const { error } = await supabase.from('emergency_insurance_cards').insert(payload);
-        if (error) throw error;
+        await addEmergencyInsuranceCard(insuranceForm);
+        setSuccessText('Insurance card added.');
       }
 
       setInsuranceDialogOpen(false);
       resetInsuranceForm();
-      setSuccessText(editingInsurance ? 'Insurance card updated.' : 'Insurance card added.');
       await loadEmergencyData();
     } catch (error) {
       setErrorText(error?.message || 'Failed to save insurance card.');
@@ -488,28 +390,17 @@ function EmergencyPage() {
     setErrorText('');
     setSuccessText('');
 
-    const payload = {
-      household_id: DEV_HOUSEHOLD_ID,
-      title: legalForm.title.trim(),
-      status: legalForm.status.trim() || 'Current',
-      last_updated: legalForm.lastUpdated.trim() || null,
-    };
-
     try {
       if (editingLegal?.id) {
-        const { error } = await supabase
-          .from('emergency_legal_directives')
-          .update(payload)
-          .eq('id', editingLegal.id);
-        if (error) throw error;
+        await updateEmergencyLegalDirective(editingLegal.id, legalForm);
+        setSuccessText('Directive updated.');
       } else {
-        const { error } = await supabase.from('emergency_legal_directives').insert(payload);
-        if (error) throw error;
+        await addEmergencyLegalDirective(legalForm);
+        setSuccessText('Directive added.');
       }
 
       setLegalDialogOpen(false);
       resetLegalForm();
-      setSuccessText(editingLegal ? 'Directive updated.' : 'Directive added.');
       await loadEmergencyData();
     } catch (error) {
       setErrorText(error?.message || 'Failed to save directive.');
@@ -526,15 +417,11 @@ function EmergencyPage() {
     setErrorText('');
     setSuccessText('');
 
-    const payload = {
-      household_id: DEV_HOUSEHOLD_ID,
-      item: checklistForm.item.trim(),
-      checked: false,
-    };
-
     try {
-      const { error } = await supabase.from('emergency_checklist_items').insert(payload);
-      if (error) throw error;
+      await addEmergencyChecklistItem({
+        item: checklistForm.item.trim(),
+        checked: false,
+      });
 
       setChecklistDialogOpen(false);
       resetChecklistForm();
@@ -547,17 +434,12 @@ function EmergencyPage() {
     }
   }
 
-  async function toggleChecklistItem(id, checked) {
+  async function handleToggleChecklistItem(id, checked) {
     setErrorText('');
     setSuccessText('');
 
     try {
-      const { error } = await supabase
-        .from('emergency_checklist_items')
-        .update({ checked: !checked })
-        .eq('id', id);
-
-      if (error) throw error;
+      await toggleEmergencyChecklistItem(id, checked);
       await loadEmergencyData();
     } catch (error) {
       setErrorText(error?.message || 'Failed to update checklist item.');
@@ -571,19 +453,25 @@ function EmergencyPage() {
     setErrorText('');
     setSuccessText('');
 
-    const tableMap = {
-      contact: 'emergency_contacts',
-      doctor: 'emergency_doctors',
-      medication: 'emergency_medications',
-      insurance: 'emergency_insurance_cards',
-      legal: 'emergency_legal_directives',
-      checklist: 'emergency_checklist_items',
-    };
-
     try {
-      const table = tableMap[deleteTarget.type];
-      const { error } = await supabase.from(table).delete().eq('id', deleteTarget.id);
-      if (error) throw error;
+      if (deleteTarget.type === 'contact') {
+        await deleteEmergencyContact(deleteTarget.id);
+      }
+      if (deleteTarget.type === 'doctor') {
+        await deleteEmergencyDoctor(deleteTarget.id);
+      }
+      if (deleteTarget.type === 'medication') {
+        await deleteEmergencyMedication(deleteTarget.id);
+      }
+      if (deleteTarget.type === 'insurance') {
+        await deleteEmergencyInsuranceCard(deleteTarget.id);
+      }
+      if (deleteTarget.type === 'legal') {
+        await deleteEmergencyLegalDirective(deleteTarget.id);
+      }
+      if (deleteTarget.type === 'checklist') {
+        await deleteEmergencyChecklistItem(deleteTarget.id);
+      }
 
       setDeleteDialogOpen(false);
       setDeleteTarget(null);
@@ -1020,7 +908,9 @@ function EmergencyPage() {
                         <div className="flex items-start gap-3">
                           <Checkbox
                             checked={item.checked}
-                            onCheckedChange={() => toggleChecklistItem(item.id, item.checked)}
+                            onCheckedChange={() =>
+                              handleToggleChecklistItem(item.id, item.checked)
+                            }
                             className="mt-0.5"
                           />
                           <span className="flex-1 text-sm">{item.item}</span>
