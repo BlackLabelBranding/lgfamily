@@ -300,27 +300,7 @@ function VaultPage() {
           <main className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-7xl">
               <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <h1 className="mb-2 text-3xl font-bold tracking-tight">
-                    Family Vault
-                  </h1>
-                  <p className="text-muted-foreground">
-                    Secure document storage for important household records.
-                  </p>
-                </div>
-
-                <Button
-                  className="gap-2 rounded-xl shadow-sm"
-                  onClick={() => {
-                    resetForm();
-                    setIsAddOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4" />
-                  Add document
-                </Button>
-              </div>
-
+                
               {(errorMessage || successMessage) && (
                 <div className="mb-6 space-y-2">
                   {errorMessage ? (
