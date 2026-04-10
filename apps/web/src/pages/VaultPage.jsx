@@ -299,23 +299,18 @@ function VaultPage() {
 
           <main className="p-4 sm:p-6 lg:p-8">
             <div className="mx-auto max-w-7xl">
-              <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-               <div className="mb-6 flex justify-end">
-                 <div className="mb-6 flex justify-end"> 
-                   <div className="mb-6 flex justify-end">
-  <Button
-    className="gap-2 rounded-xl shadow-sm"
-    onClick={() => {
-      resetForm();
-      setIsAddOpen(true);
-    }}
-  >
-    <Plus className="h-4 w-4" />
-    Add document
-  </Button>
-</div>
-
-
+              <div className="mb-6 flex justify-end">
+                <Button
+                  className="gap-2 rounded-xl shadow-sm"
+                  onClick={() => {
+                    resetForm();
+                    setIsAddOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add document
+                </Button>
+              </div>
 
               {(errorMessage || successMessage) && (
                 <div className="mb-6 space-y-2">
