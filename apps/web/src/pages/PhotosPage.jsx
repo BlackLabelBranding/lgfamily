@@ -1,7 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
-import Sidebar from '@/components/Sidebar.jsx';
-import Header from '@/components/Header.jsx';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -523,478 +521,471 @@ function PhotosPage() {
         />
       </Helmet>
 
-      <div className="flex min-h-screen bg-background">
-        <Sidebar />
-        <div className="flex-1 lg:ml-64">
-          <Header />
+      <div className="space-y-6">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Photos & Memories</h2>
+            <p className="text-muted-foreground">
+              Preserve family moments, albums, milestones, and important records.
+            </p>
+          </div>
 
-          <main className="p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto max-w-7xl">
-              <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <h1 className="mb-2 text-3xl font-bold tracking-tight">Photos & memories</h1>
-                  <p className="text-muted-foreground">
-                    Preserve family moments, albums, milestones, and important records.
-                  </p>
-                </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              className="gap-2 rounded-xl shadow-sm"
+              onClick={() => openAddMemoryDialog('album')}
+            >
+              <Plus className="h-4 w-4" />
+              Add memory
+            </Button>
 
-                <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 rounded-xl"
+              onClick={openAddAlbumDialog}
+            >
+              <FolderOpen className="h-4 w-4" />
+              New album
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 rounded-xl"
+              onClick={() => openBulkUploadDialog()}
+            >
+              <Upload className="h-4 w-4" />
+              Mass upload
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            icon={<FolderOpen className="h-5 w-5 text-muted-foreground" />}
+            label="Albums"
+            value={albums.length}
+          />
+          <StatCard
+            icon={<ImageIcon className="h-5 w-5 text-muted-foreground" />}
+            label="Memories"
+            value={memories.filter((item) => item.type !== 'scan').length}
+          />
+          <StatCard
+            icon={<Calendar className="h-5 w-5 text-muted-foreground" />}
+            label="Milestones"
+            value={milestones.length}
+          />
+          <StatCard
+            icon={<FileText className="h-5 w-5 text-muted-foreground" />}
+            label="Scans"
+            value={scans.length}
+          />
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
+            <TabsTrigger value="albums" className="text-xs sm:text-sm">
+              Albums
+            </TabsTrigger>
+            <TabsTrigger value="by-person" className="text-xs sm:text-sm">
+              By person
+            </TabsTrigger>
+            <TabsTrigger value="milestones" className="text-xs sm:text-sm">
+              Milestones
+            </TabsTrigger>
+            <TabsTrigger value="scans" className="text-xs sm:text-sm">
+              Scans
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="albums" className="space-y-4">
+            {!selectedAlbum ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">Albums</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Create albums from the front end and group memories together.
+                    </p>
+                  </div>
+
                   <Button
-                    size="sm"
-                    className="gap-2 rounded-xl shadow-sm"
-                    onClick={() => openAddMemoryDialog('album')}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add memory
-                  </Button>
-
-                  <Button
-                    size="sm"
                     variant="outline"
+                    size="sm"
                     className="gap-2 rounded-xl"
                     onClick={openAddAlbumDialog}
                   >
-                    <FolderOpen className="h-4 w-4" />
+                    <Plus className="h-4 w-4" />
                     New album
                   </Button>
+                </div>
 
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 rounded-xl"
-                    onClick={() => openBulkUploadDialog()}
+                {albumsWithStats.length ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {albumsWithStats.map((album) => (
+                      <Card
+                        key={album.id}
+                        className="overflow-hidden rounded-2xl shadow-sm transition-all duration-200 hover:shadow-lg"
+                      >
+                        <CardContent className="p-0">
+                          <button
+                            type="button"
+                            className="block w-full text-left"
+                            onClick={() => setSelectedAlbumId(album.id)}
+                          >
+                            <div className="aspect-video overflow-hidden bg-muted">
+                              {album.cover ? (
+                                <img
+                                  src={album.cover}
+                                  alt={album.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <FolderOpen className="h-12 w-12 text-muted-foreground" />
+                                </div>
+                              )}
+                            </div>
+                          </button>
+
+                          <div className="p-4">
+                            <div className="mb-2 flex items-start justify-between gap-3">
+                              <div>
+                                <h4 className="font-semibold text-sm">{album.name}</h4>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {formatDisplayDate(album.date)}
+                                </p>
+                              </div>
+                              <Badge variant="secondary" className="text-[11px]">
+                                {album.category}
+                              </Badge>
+                            </div>
+
+                            {album.description ? (
+                              <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                                {album.description}
+                              </p>
+                            ) : null}
+
+                            <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
+                              <span>
+                                {album.count} item{album.count === 1 ? '' : 's'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() => setSelectedAlbumId(album.id)}
+                              >
+                                Open
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl text-destructive hover:text-destructive"
+                                onClick={() => handleDeleteAlbum(album.id)}
+                              >
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="No albums yet"
+                    description="Create your first album to organize family memories."
+                    actionLabel="New album"
+                    onAction={openAddAlbumDialog}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mb-2 gap-2 px-0 hover:bg-transparent"
+                        onClick={() => setSelectedAlbumId(null)}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to albums
+                      </Button>
+
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <h3 className="text-xl font-semibold">{selectedAlbum.name}</h3>
+                        <Badge variant="secondary">{selectedAlbum.category}</Badge>
+                      </div>
+
+                      <p className="mb-2 text-sm text-muted-foreground">
+                        {selectedAlbum.description || 'No description yet.'}
+                      </p>
+
+                      <p className="text-xs text-muted-foreground">
+                        {formatDisplayDate(selectedAlbum.date)} • {selectedAlbum.count} item
+                        {selectedAlbum.count === 1 ? '' : 's'}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        className="gap-2 rounded-xl"
+                        onClick={() => openAddMemoryDialog('album', selectedAlbum.id)}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add memory
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 rounded-xl"
+                        onClick={() => openBulkUploadDialog(selectedAlbum.id)}
+                      >
+                        <Upload className="h-4 w-4" />
+                        Mass upload
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedAlbumMemories.length ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {selectedAlbumMemories.map((memory) => renderMemoryCard(memory))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title="This album is empty"
+                    description="Add a memory or use mass upload to fill this album."
+                    actionLabel="Add memory"
+                    onAction={() => openAddMemoryDialog('album', selectedAlbum.id)}
+                  />
+                )}
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="by-person" className="space-y-4">
+            <div className="rounded-2xl border bg-card p-4 shadow-sm">
+              <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h3 className="font-semibold">Filter memories</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Browse photos and memories by family member or category.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <select
+                    value={personFilter}
+                    onChange={(e) => setPersonFilter(e.target.value)}
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
                   >
-                    <Upload className="h-4 w-4" />
-                    Mass upload
-                  </Button>
+                    <option>All members</option>
+                    {familyMembers.map((member) => (
+                      <option key={member.id} value={member.name}>
+                        {member.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className="h-10 rounded-md border bg-background px-3 text-sm"
+                  >
+                    <option>All categories</option>
+                    {categories.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <StatCard
-                  icon={<FolderOpen className="h-5 w-5 text-muted-foreground" />}
-                  label="Albums"
-                  value={albums.length}
-                />
-                <StatCard
-                  icon={<ImageIcon className="h-5 w-5 text-muted-foreground" />}
-                  label="Memories"
-                  value={memories.filter((item) => item.type !== 'scan').length}
-                />
-                <StatCard
-                  icon={<Calendar className="h-5 w-5 text-muted-foreground" />}
-                  label="Milestones"
-                  value={milestones.length}
-                />
-                <StatCard
-                  icon={<FileText className="h-5 w-5 text-muted-foreground" />}
-                  label="Scans"
-                  value={scans.length}
-                />
+              <div className="mb-2 flex flex-wrap gap-2">
+                <Badge variant="secondary">{personFilter}</Badge>
+                <Badge variant="outline">{categoryFilter}</Badge>
               </div>
-
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
-                  <TabsTrigger value="albums" className="text-xs sm:text-sm">
-                    Albums
-                  </TabsTrigger>
-                  <TabsTrigger value="by-person" className="text-xs sm:text-sm">
-                    By person
-                  </TabsTrigger>
-                  <TabsTrigger value="milestones" className="text-xs sm:text-sm">
-                    Milestones
-                  </TabsTrigger>
-                  <TabsTrigger value="scans" className="text-xs sm:text-sm">
-                    Scans
-                  </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="albums" className="space-y-4">
-                  {!selectedAlbum ? (
-                    <>
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <h3 className="font-semibold">Albums</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Create albums from the front end and group memories together.
-                          </p>
-                        </div>
-
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-2 rounded-xl"
-                          onClick={openAddAlbumDialog}
-                        >
-                          <Plus className="h-4 w-4" />
-                          New album
-                        </Button>
-                      </div>
-
-                      {albumsWithStats.length ? (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {albumsWithStats.map((album) => (
-                            <Card
-                              key={album.id}
-                              className="overflow-hidden rounded-2xl shadow-sm transition-all duration-200 hover:shadow-lg"
-                            >
-                              <CardContent className="p-0">
-                                <button
-                                  type="button"
-                                  className="block w-full text-left"
-                                  onClick={() => setSelectedAlbumId(album.id)}
-                                >
-                                  <div className="aspect-video overflow-hidden bg-muted">
-                                    {album.cover ? (
-                                      <img
-                                        src={album.cover}
-                                        alt={album.name}
-                                        className="h-full w-full object-cover"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center">
-                                        <FolderOpen className="h-12 w-12 text-muted-foreground" />
-                                      </div>
-                                    )}
-                                  </div>
-                                </button>
-
-                                <div className="p-4">
-                                  <div className="mb-2 flex items-start justify-between gap-3">
-                                    <div>
-                                      <h4 className="font-semibold text-sm">{album.name}</h4>
-                                      <p className="mt-1 text-xs text-muted-foreground">
-                                        {formatDisplayDate(album.date)}
-                                      </p>
-                                    </div>
-                                    <Badge variant="secondary" className="text-[11px]">
-                                      {album.category}
-                                    </Badge>
-                                  </div>
-
-                                  {album.description ? (
-                                    <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
-                                      {album.description}
-                                    </p>
-                                  ) : null}
-
-                                  <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
-                                    <span>{album.count} item{album.count === 1 ? '' : 's'}</span>
-                                  </div>
-
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="rounded-xl"
-                                      onClick={() => setSelectedAlbumId(album.id)}
-                                    >
-                                      Open
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="rounded-xl text-destructive hover:text-destructive"
-                                      onClick={() => handleDeleteAlbum(album.id)}
-                                    >
-                                      Delete
-                                    </Button>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <EmptyState
-                          title="No albums yet"
-                          description="Create your first album to organize family memories."
-                          actionLabel="New album"
-                          onAction={openAddAlbumDialog}
-                        />
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="rounded-2xl border bg-card p-4 shadow-sm">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                          <div className="min-w-0">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="mb-2 gap-2 px-0 hover:bg-transparent"
-                              onClick={() => setSelectedAlbumId(null)}
-                            >
-                              <ArrowLeft className="h-4 w-4" />
-                              Back to albums
-                            </Button>
-
-                            <div className="mb-2 flex flex-wrap items-center gap-2">
-                              <h3 className="text-xl font-semibold">{selectedAlbum.name}</h3>
-                              <Badge variant="secondary">{selectedAlbum.category}</Badge>
-                            </div>
-
-                            <p className="mb-2 text-sm text-muted-foreground">
-                              {selectedAlbum.description || 'No description yet.'}
-                            </p>
-
-                            <p className="text-xs text-muted-foreground">
-                              {formatDisplayDate(selectedAlbum.date)} • {selectedAlbum.count} item
-                              {selectedAlbum.count === 1 ? '' : 's'}
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              className="gap-2 rounded-xl"
-                              onClick={() => openAddMemoryDialog('album', selectedAlbum.id)}
-                            >
-                              <Plus className="h-4 w-4" />
-                              Add memory
-                            </Button>
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-2 rounded-xl"
-                              onClick={() => openBulkUploadDialog(selectedAlbum.id)}
-                            >
-                              <Upload className="h-4 w-4" />
-                              Mass upload
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {selectedAlbumMemories.length ? (
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                          {selectedAlbumMemories.map((memory) => renderMemoryCard(memory))}
-                        </div>
-                      ) : (
-                        <EmptyState
-                          title="This album is empty"
-                          description="Add a memory or use mass upload to fill this album."
-                          actionLabel="Add memory"
-                          onAction={() => openAddMemoryDialog('album', selectedAlbum.id)}
-                        />
-                      )}
-                    </>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="by-person" className="space-y-4">
-                  <div className="rounded-2xl border bg-card p-4 shadow-sm">
-                    <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <h3 className="font-semibold">Filter memories</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Browse photos and memories by family member or category.
-                        </p>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <select
-                          value={personFilter}
-                          onChange={(e) => setPersonFilter(e.target.value)}
-                          className="h-10 rounded-md border bg-background px-3 text-sm"
-                        >
-                          <option>All members</option>
-                          {familyMembers.map((member) => (
-                            <option key={member.id} value={member.name}>
-                              {member.name}
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={categoryFilter}
-                          onChange={(e) => setCategoryFilter(e.target.value)}
-                          className="h-10 rounded-md border bg-background px-3 text-sm"
-                        >
-                          <option>All categories</option>
-                          {categories.map((category) => (
-                            <option key={category} value={category}>
-                              {category}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="mb-2 flex flex-wrap gap-2">
-                      <Badge variant="secondary">{personFilter}</Badge>
-                      <Badge variant="outline">{categoryFilter}</Badge>
-                    </div>
-                  </div>
-
-                  {filteredByPerson.length ? (
-                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                      {filteredByPerson.map((memory) => renderMemoryCard(memory, true))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      title="No matching memories"
-                      description="Try changing the selected person or category."
-                    />
-                  )}
-                </TabsContent>
-
-                <TabsContent value="milestones" className="space-y-4">
-                  {milestones.length ? (
-                    <div className="space-y-4">
-                      {milestones.map((memory) => (
-                        <Card
-                          key={memory.id}
-                          className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md"
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-start gap-4">
-                              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                                <Calendar className="h-5 w-5 text-muted-foreground" />
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="mb-2 flex flex-wrap items-center gap-2">
-                                  <h4 className="font-semibold text-sm">{memory.title}</h4>
-                                  <Badge variant="secondary" className="text-[11px]">
-                                    {memory.category}
-                                  </Badge>
-                                </div>
-
-                                <p className="mb-2 text-xs text-muted-foreground">
-                                  {formatDisplayDate(memory.date)}
-                                </p>
-
-                                {memory.description ? (
-                                  <p className="mb-3 text-sm text-muted-foreground">
-                                    {memory.description}
-                                  </p>
-                                ) : null}
-
-                                <div className="mb-3 flex flex-wrap gap-1">
-                                  {memory.people.map((person) => (
-                                    <Badge
-                                      key={`${memory.id}-${person}`}
-                                      variant="outline"
-                                      className="text-[11px]"
-                                    >
-                                      {person}
-                                    </Badge>
-                                  ))}
-                                </div>
-
-                                <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl"
-                                    onClick={() => openDetailDialog(memory)}
-                                  >
-                                    View
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl"
-                                    onClick={() => openEditMemoryDialog(memory)}
-                                  >
-                                    Edit
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      title="No milestones yet"
-                      description="Capture big family moments like birthdays, first days, and achievements."
-                      actionLabel="Add milestone"
-                      onAction={() => openAddMemoryDialog('milestone')}
-                    />
-                  )}
-                </TabsContent>
-
-                <TabsContent value="scans" className="space-y-4">
-                  {scans.length ? (
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {scans.map((memory) => (
-                        <Card
-                          key={memory.id}
-                          className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md"
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex items-start gap-3">
-                              <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
-                                <FileText className="h-5 w-5 text-muted-foreground" />
-                              </div>
-
-                              <div className="min-w-0 flex-1">
-                                <div className="mb-1 flex flex-wrap items-center gap-2">
-                                  <h4 className="font-medium text-sm">{memory.title}</h4>
-                                  <Badge variant="secondary" className="text-[11px]">
-                                    {memory.category}
-                                  </Badge>
-                                </div>
-
-                                {memory.fileLabel ? (
-                                  <p className="text-xs text-muted-foreground">
-                                    {memory.fileLabel}
-                                  </p>
-                                ) : null}
-
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  Saved {formatDisplayDate(memory.date)}
-                                </p>
-
-                                <div className="mt-3 flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl"
-                                    onClick={() => openDetailDialog(memory)}
-                                  >
-                                    View
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl"
-                                    onClick={() => openEditMemoryDialog(memory)}
-                                  >
-                                    Edit
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="rounded-xl text-destructive hover:text-destructive"
-                                    onClick={() => handleDeleteMemory(memory.id)}
-                                  >
-                                    Delete
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      title="No saved scans yet"
-                      description="Store important family documents, forms, and records here."
-                      actionLabel="Add scan"
-                      onAction={() => openAddMemoryDialog('scan')}
-                    />
-                  )}
-                </TabsContent>
-              </Tabs>
             </div>
-          </main>
-        </div>
+
+            {filteredByPerson.length ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+                {filteredByPerson.map((memory) => renderMemoryCard(memory, true))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No matching memories"
+                description="Try changing the selected person or category."
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="milestones" className="space-y-4">
+            {milestones.length ? (
+              <div className="space-y-4">
+                {milestones.map((memory) => (
+                  <Card
+                    key={memory.id}
+                    className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <Calendar className="h-5 w-5 text-muted-foreground" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <h4 className="font-semibold text-sm">{memory.title}</h4>
+                            <Badge variant="secondary" className="text-[11px]">
+                              {memory.category}
+                            </Badge>
+                          </div>
+
+                          <p className="mb-2 text-xs text-muted-foreground">
+                            {formatDisplayDate(memory.date)}
+                          </p>
+
+                          {memory.description ? (
+                            <p className="mb-3 text-sm text-muted-foreground">
+                              {memory.description}
+                            </p>
+                          ) : null}
+
+                          <div className="mb-3 flex flex-wrap gap-1">
+                            {memory.people.map((person) => (
+                              <Badge
+                                key={`${memory.id}-${person}`}
+                                variant="outline"
+                                className="text-[11px]"
+                              >
+                                {person}
+                              </Badge>
+                            ))}
+                          </div>
+
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => openDetailDialog(memory)}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => openEditMemoryDialog(memory)}
+                            >
+                              Edit
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No milestones yet"
+                description="Capture big family moments like birthdays, first days, and achievements."
+                actionLabel="Add milestone"
+                onAction={() => openAddMemoryDialog('milestone')}
+              />
+            )}
+          </TabsContent>
+
+          <TabsContent value="scans" className="space-y-4">
+            {scans.length ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {scans.map((memory) => (
+                  <Card
+                    key={memory.id}
+                    className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex flex-wrap items-center gap-2">
+                            <h4 className="font-medium text-sm">{memory.title}</h4>
+                            <Badge variant="secondary" className="text-[11px]">
+                              {memory.category}
+                            </Badge>
+                          </div>
+
+                          {memory.fileLabel ? (
+                            <p className="text-xs text-muted-foreground">
+                              {memory.fileLabel}
+                            </p>
+                          ) : null}
+
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Saved {formatDisplayDate(memory.date)}
+                          </p>
+
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => openDetailDialog(memory)}
+                            >
+                              View
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => openEditMemoryDialog(memory)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl text-destructive hover:text-destructive"
+                              onClick={() => handleDeleteMemory(memory.id)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No saved scans yet"
+                description="Store important family documents, forms, and records here."
+                actionLabel="Add scan"
+                onAction={() => openAddMemoryDialog('scan')}
+              />
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog
