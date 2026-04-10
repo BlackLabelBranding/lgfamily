@@ -249,9 +249,7 @@ function VaultPage() {
       setDocumentToDelete(null);
       await fetchDocuments();
     } catch (error) {
-      setErrorMessage(
-        error?.message || 'Could not delete document.'
-      );
+      setErrorMessage(error?.message || 'Could not delete document.');
     }
   }
 
@@ -282,9 +280,7 @@ function VaultPage() {
         window.document.body.removeChild(link);
       }
     } catch (error) {
-      setErrorMessage(
-        error?.message || 'Could not download document.'
-      );
+      setErrorMessage(error?.message || 'Could not download document.');
     }
   }
 
@@ -298,28 +294,25 @@ function VaultPage() {
         />
       </Helmet>
 
-      <div className="flex min-h-screen bg-[hsl(var(--vault-bg))]">
+      <div className="flex min-h-screen bg-background">
         <Sidebar />
         <div className="flex-1 lg:ml-64">
           <Header />
 
           <main className="p-4 sm:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto">
+            <div className="mx-auto max-w-7xl">
               <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                 <div>
-                  <h1
-                    className="mb-2 text-3xl font-bold text-[hsl(var(--vault-foreground))]"
-                    style={{ letterSpacing: '-0.02em' }}
-                  >
+                  <h1 className="mb-2 text-3xl font-bold tracking-tight">
                     Family vault
                   </h1>
-                  <p className="text-[hsl(var(--vault-muted))]">
-                    Secure document storage
+                  <p className="text-muted-foreground">
+                    Secure document storage for important household records.
                   </p>
                 </div>
 
                 <Button
-                  className="gap-2 touch-target"
+                  className="gap-2 rounded-xl shadow-sm"
                   onClick={() => {
                     resetForm();
                     setIsAddOpen(true);
@@ -331,75 +324,100 @@ function VaultPage() {
               </div>
 
               {(errorMessage || successMessage) && (
-                <div className="mb-4 space-y-2">
+                <div className="mb-6 space-y-2">
                   {errorMessage ? (
-                    <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                       {errorMessage}
                     </div>
                   ) : null}
+
                   {successMessage ? (
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
                       {successMessage}
                     </div>
                   ) : null}
                 </div>
               )}
 
-              <Tabs
-                value={activeTab}
-                onValueChange={setActiveTab}
-                className="space-y-6"
-              >
-                <TabsList className="grid h-auto w-full grid-cols-2 bg-[hsl(var(--vault-surface))] sm:grid-cols-4 lg:grid-cols-7">
+              <section className="rounded-3xl border border-white/10 bg-[hsl(var(--vault-bg))] p-4 shadow-sm sm:p-6 lg:p-8">
+                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold tracking-tight text-[hsl(var(--vault-foreground))]">
+                      Family vault
+                    </h2>
+                    <p className="mt-1 text-[hsl(var(--vault-muted))]">
+                      Store IDs, insurance records, legal files, medical documents, and more.
+                    </p>
+                  </div>
+
+                  <Button
+                    className="gap-2 rounded-xl"
+                    onClick={() => {
+                      resetForm();
+                      setIsAddOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add document
+                  </Button>
+                </div>
+
+                <Tabs
+                  value={activeTab}
+                  onValueChange={setActiveTab}
+                  className="space-y-6"
+                >
+                  <TabsList className="grid h-auto w-full grid-cols-2 rounded-2xl bg-[hsl(var(--vault-surface))] p-1 sm:grid-cols-4 lg:grid-cols-7">
+                    {CATEGORY_TABS.map((category) => (
+                      <TabsTrigger
+                        key={category}
+                        value={category}
+                        className="rounded-xl text-xs sm:text-sm"
+                      >
+                        {category}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+
                   {CATEGORY_TABS.map((category) => (
-                    <TabsTrigger
+                    <TabsContent
                       key={category}
                       value={category}
-                      className="text-xs sm:text-sm"
+                      className="space-y-4"
                     >
-                      {category}
-                    </TabsTrigger>
+                      {isLoading ? (
+                        <div className="rounded-3xl border border-white/10 bg-white/5 p-12 text-center text-sm text-[hsl(var(--vault-muted))]">
+                          Loading documents...
+                        </div>
+                      ) : documentsByCategory[category]?.length ? (
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          {documentsByCategory[category].map((doc) => (
+                            <VaultDocumentCard
+                              key={doc.id}
+                              document={doc}
+                              onView={() => handleViewDocument(doc)}
+                              onDownload={() => handleDownloadDocument(doc)}
+                              onDelete={() => openDeleteDialog(doc)}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyVaultState
+                          category={category}
+                          onAdd={() => {
+                            resetForm();
+                            setFormData((prev) => ({
+                              ...prev,
+                              category,
+                            }));
+                            setIsAddOpen(true);
+                          }}
+                        />
+                      )}
+                    </TabsContent>
                   ))}
-                </TabsList>
-
-                {CATEGORY_TABS.map((category) => (
-                  <TabsContent
-                    key={category}
-                    value={category}
-                    className="space-y-4"
-                  >
-                    {isLoading ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-sm text-[hsl(var(--vault-muted))]">
-                        Loading documents...
-                      </div>
-                    ) : documentsByCategory[category]?.length ? (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        {documentsByCategory[category].map((doc) => (
-                          <VaultDocumentCard
-                            key={doc.id}
-                            document={doc}
-                            onView={() => handleViewDocument(doc)}
-                            onDownload={() => handleDownloadDocument(doc)}
-                            onDelete={() => openDeleteDialog(doc)}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyVaultState
-                        category={category}
-                        onAdd={() => {
-                          resetForm();
-                          setFormData((prev) => ({
-                            ...prev,
-                            category,
-                          }));
-                          setIsAddOpen(true);
-                        }}
-                      />
-                    )}
-                  </TabsContent>
-                ))}
-              </Tabs>
+                </Tabs>
+              </section>
             </div>
           </main>
         </div>
@@ -435,9 +453,7 @@ function VaultPage() {
               <Field label="Category" required>
                 <select
                   value={formData.category}
-                  onChange={(e) =>
-                    handleInputChange('category', e.target.value)
-                  }
+                  onChange={(e) => handleInputChange('category', e.target.value)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                   required
                 >
@@ -454,9 +470,7 @@ function VaultPage() {
               <Field label="Subcategory">
                 <input
                   value={formData.subcategory}
-                  onChange={(e) =>
-                    handleInputChange('subcategory', e.target.value)
-                  }
+                  onChange={(e) => handleInputChange('subcategory', e.target.value)}
                   placeholder="Example: Passport, License, Policy"
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 />
@@ -465,9 +479,7 @@ function VaultPage() {
               <Field label="Permission">
                 <select
                   value={formData.permission}
-                  onChange={(e) =>
-                    handleInputChange('permission', e.target.value)
-                  }
+                  onChange={(e) => handleInputChange('permission', e.target.value)}
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 >
                   <option value="Admin Only">Admin Only</option>
@@ -510,7 +522,7 @@ function VaultPage() {
             </Field>
 
             <Field label="File" required>
-              <div className="rounded-xl border border-dashed p-4">
+              <div className="rounded-2xl border border-dashed p-4">
                 <div className="flex items-center gap-3">
                   <Upload className="h-5 w-5 text-muted-foreground" />
                   <div className="flex-1">
@@ -534,6 +546,7 @@ function VaultPage() {
               <Button
                 type="button"
                 variant="outline"
+                className="rounded-xl"
                 onClick={() => {
                   setIsAddOpen(false);
                   resetForm();
@@ -541,7 +554,12 @@ function VaultPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isUploading} className="gap-2">
+
+              <Button
+                type="submit"
+                disabled={isUploading}
+                className="gap-2 rounded-xl"
+              >
                 {isUploading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -561,12 +579,11 @@ function VaultPage() {
           <DialogHeader>
             <DialogTitle>Are you sure?</DialogTitle>
             <DialogDescription>
-              This will permanently delete this document from the vault and remove
-              the stored file.
+              This will permanently delete this document from the vault and remove the stored file.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="rounded-xl border bg-muted/40 p-3 text-sm">
+          <div className="rounded-2xl border bg-muted/40 p-3 text-sm">
             {documentToDelete?.title || 'Selected document'}
           </div>
 
@@ -574,6 +591,7 @@ function VaultPage() {
             <Button
               type="button"
               variant="outline"
+              className="rounded-xl"
               onClick={() => {
                 setIsDeleteOpen(false);
                 setDocumentToDelete(null);
@@ -581,9 +599,11 @@ function VaultPage() {
             >
               Cancel
             </Button>
+
             <Button
               type="button"
               variant="destructive"
+              className="rounded-xl"
               onClick={handleDeleteDocument}
             >
               Delete
@@ -602,13 +622,13 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
   return (
     <Card
       className={cn(
-        'transition-all duration-200 hover:shadow-md',
+        'rounded-2xl border-white/10 bg-white shadow-sm transition-all duration-200 hover:shadow-md',
         isExpiringSoon && 'border-accent'
       )}
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg bg-muted">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-muted">
             <FileText className="h-6 w-6 text-muted-foreground" />
           </div>
 
@@ -622,6 +642,7 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
                   </p>
                 ) : null}
               </div>
+
               {isLocked ? (
                 <Lock className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
               ) : null}
@@ -660,7 +681,7 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 gap-1 text-xs"
+                className="h-8 gap-1 rounded-xl text-xs"
                 onClick={onView}
               >
                 <Eye className="h-3 w-3" />
@@ -670,7 +691,7 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 gap-1 text-xs"
+                className="h-8 gap-1 rounded-xl text-xs"
                 onClick={onDownload}
               >
                 <Download className="h-3 w-3" />
@@ -680,7 +701,7 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
               <Button
                 size="sm"
                 variant="ghost"
-                className="h-8 gap-1 text-xs text-destructive hover:text-destructive"
+                className="h-8 gap-1 rounded-xl text-xs text-destructive hover:text-destructive"
                 onClick={onDelete}
               >
                 <Trash2 className="h-3 w-3" />
@@ -696,18 +717,21 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
 
 function EmptyVaultState({ category, onAdd }) {
   return (
-    <Card className="border-white/10 bg-white/5">
-      <CardContent className="flex flex-col items-center justify-center px-6 py-12 text-center">
+    <Card className="rounded-3xl border border-white/10 bg-white/5 shadow-none">
+      <CardContent className="flex min-h-[260px] flex-col items-center justify-center px-6 py-12 text-center">
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
           <FileText className="h-6 w-6 text-[hsl(var(--vault-muted))]" />
         </div>
+
         <h3 className="mb-2 text-lg font-semibold text-[hsl(var(--vault-foreground))]">
           No {category.toLowerCase()} documents yet
         </h3>
-        <p className="mb-4 max-w-md text-sm text-[hsl(var(--vault-muted))]">
+
+        <p className="mb-5 max-w-md text-sm text-[hsl(var(--vault-muted))]">
           Add your first document to this section of the family vault.
         </p>
-        <Button onClick={onAdd} className="gap-2">
+
+        <Button onClick={onAdd} className="gap-2 rounded-xl">
           <Plus className="h-4 w-4" />
           Add document
         </Button>
