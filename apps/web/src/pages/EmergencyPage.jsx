@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Helmet } from 'react-helmet';
 import EmergencyContactCard from '@/components/EmergencyContactCard.jsx';
+import { supabase } from '@/lib/supabaseClient.js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -24,44 +25,10 @@ import {
   Trash2,
   Shield,
   Scale,
+  Loader2,
 } from 'lucide-react';
 
-const initialEmergencyContacts = [
-  { id: 'c1', name: 'Emergency Services', relationship: '911', phone: '911', email: '', address: '' },
-  { id: 'c2', name: 'Dr. Anika Bergstrom', relationship: 'Family Doctor', phone: '(555) 345-6789', email: 'dr.bergstrom@clinic.com', address: '123 Medical Plaza' },
-  { id: 'c3', name: 'Grandma Rose', relationship: 'Grandmother', phone: '(555) 456-7890', email: 'rose.chen@email.com', address: '456 Oak Street' },
-  { id: 'c4', name: 'Tom Martinez', relationship: 'Neighbor', phone: '(555) 567-8901', email: 'tom.m@email.com', address: 'Next door' },
-];
-
-const initialDoctors = [
-  { id: 'd1', name: 'Dr. Anika Bergstrom', specialty: 'Family Medicine', phone: '(555) 345-6789', address: 'City Medical Center' },
-  { id: 'd2', name: 'Dr. Raj Patel', specialty: 'Pediatrics', phone: '(555) 678-9012', address: "Children's Health Clinic" },
-];
-
-const initialMedications = [
-  { id: 'm1', name: 'Albuterol inhaler', person: 'Lucas', dosage: 'As needed for asthma', prescriber: 'Dr. Patel' },
-  { id: 'm2', name: 'Antihistamine', person: 'Emma', dosage: 'Daily during allergy season', prescriber: 'Dr. Bergstrom' },
-];
-
-const initialInsuranceCards = [
-  { id: 'i1', type: 'Health Insurance', provider: 'BlueCross', policyNumber: 'BC-123456789', groupNumber: 'GRP-987654' },
-  { id: 'i2', type: 'Dental Insurance', provider: 'DeltaDental', policyNumber: 'DD-987654321', groupNumber: 'GRP-123456' },
-];
-
-const initialLegalDirectives = [
-  { id: 'l1', title: 'Healthcare proxy - Sarah', status: 'Current', lastUpdated: 'Jan 2025' },
-  { id: 'l2', title: 'Healthcare proxy - Michael', status: 'Current', lastUpdated: 'Jan 2025' },
-  { id: 'l3', title: 'Living will - Sarah', status: 'Current', lastUpdated: 'Jan 2025' },
-];
-
-const initialChecklist = [
-  { id: 'k1', item: 'Emergency contact list printed and posted', checked: true },
-  { id: 'k2', item: 'First aid kit stocked and accessible', checked: true },
-  { id: 'k3', item: 'Fire extinguisher inspected', checked: false },
-  { id: 'k4', item: 'Emergency evacuation plan reviewed', checked: true },
-  { id: 'k5', item: 'Important documents backed up', checked: true },
-  { id: 'k6', item: 'Emergency supplies (water, food) stocked', checked: false },
-];
+const DEV_HOUSEHOLD_ID = 'd2b8464e-a258-46a0-89de-a1b921062943';
 
 const emptyContactForm = {
   name: '',
@@ -105,12 +72,17 @@ const emptyChecklistForm = {
 function EmergencyPage() {
   const [activeTab, setActiveTab] = useState('contacts');
 
-  const [emergencyContacts, setEmergencyContacts] = useState(initialEmergencyContacts);
-  const [doctors, setDoctors] = useState(initialDoctors);
-  const [medications, setMedications] = useState(initialMedications);
-  const [insuranceCards, setInsuranceCards] = useState(initialInsuranceCards);
-  const [legalDirectives, setLegalDirectives] = useState(initialLegalDirectives);
-  const [criticalChecklist, setCriticalChecklist] = useState(initialChecklist);
+  const [emergencyContacts, setEmergencyContacts] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [medications, setMedications] = useState([]);
+  const [insuranceCards, setInsuranceCards] = useState([]);
+  const [legalDirectives, setLegalDirectives] = useState([]);
+  const [criticalChecklist, setCriticalChecklist] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorText, setErrorText] = useState('');
+  const [successText, setSuccessText] = useState('');
 
   const [contactDialogOpen, setContactDialogOpen] = useState(false);
   const [doctorDialogOpen, setDoctorDialogOpen] = useState(false);
@@ -135,16 +107,102 @@ function EmergencyPage() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
 
+  useEffect(() => {
+    loadEmergencyData();
+  }, []);
+
+  async function loadEmergencyData() {
+    setLoading(true);
+    setErrorText('');
+
+    try {
+      const [
+        contactsRes,
+        doctorsRes,
+        medsRes,
+        insuranceRes,
+        legalRes,
+        checklistRes,
+      ] = await Promise.all([
+        supabase
+          .from('emergency_contacts')
+          .select('*')
+          .eq('household_id', DEV_HOUSEHOLD_ID)
+          .order('created_at', { ascending: false }),
+
+        supabase
+          .from('emergency_doctors')
+          .select('*')
+          .eq('household_id', DEV_HOUSEHOLD_ID)
+          .order('created_at', { ascending: false }),
+
+        supabase
+          .from('emergency_medications')
+          .select('*')
+          .eq('household_id', DEV_HOUSEHOLD_ID)
+          .order('created_at', { ascending: false }),
+
+        supabase
+          .from('emergency_insurance_cards')
+          .select('*')
+          .eq('household_id', DEV_HOUSEHOLD_ID)
+          .order('created_at', { ascending: false }),
+
+        supabase
+          .from('emergency_legal_directives')
+          .select('*')
+          .eq('household_id', DEV_HOUSEHOLD_ID)
+          .order('created_at', { ascending: false }),
+
+        supabase
+          .from('emergency_checklist_items')
+          .select('*')
+          .eq('household_id', DEV_HOUSEHOLD_ID)
+          .order('created_at', { ascending: true }),
+      ]);
+
+      const results = [
+        contactsRes,
+        doctorsRes,
+        medsRes,
+        insuranceRes,
+        legalRes,
+        checklistRes,
+      ];
+
+      const firstError = results.find((r) => r.error)?.error;
+      if (firstError) throw firstError;
+
+      setEmergencyContacts(contactsRes.data ?? []);
+      setDoctors(doctorsRes.data ?? []);
+      setMedications(medsRes.data ?? []);
+      setInsuranceCards(
+        (insuranceRes.data ?? []).map((item) => ({
+          ...item,
+          policyNumber: item.policy_number ?? '',
+          groupNumber: item.group_number ?? '',
+        }))
+      );
+      setLegalDirectives(
+        (legalRes.data ?? []).map((item) => ({
+          ...item,
+          lastUpdated: item.last_updated ?? '',
+        }))
+      );
+      setCriticalChecklist(checklistRes.data ?? []);
+    } catch (error) {
+      console.error('Failed to load emergency info:', error);
+      setErrorText(error?.message || 'Failed to load emergency info.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const checklistProgress = useMemo(() => {
     const total = criticalChecklist.length;
     const complete = criticalChecklist.filter((item) => item.checked).length;
     return { total, complete };
   }, [criticalChecklist]);
-
-  function openDeleteDialog(type, id, label) {
-    setDeleteTarget({ type, id, label });
-    setDeleteDialogOpen(true);
-  }
 
   function resetContactForm() {
     setEditingContact(null);
@@ -173,6 +231,11 @@ function EmergencyPage() {
 
   function resetChecklistForm() {
     setChecklistForm(emptyChecklistForm);
+  }
+
+  function openDeleteDialog(type, id, label) {
+    setDeleteTarget({ type, id, label });
+    setDeleteDialogOpen(true);
   }
 
   function openAddContactDialog() {
@@ -260,175 +323,277 @@ function EmergencyPage() {
     setChecklistDialogOpen(true);
   }
 
-  function handleSaveContact(e) {
+  async function handleSaveContact(e) {
     e.preventDefault();
     if (!contactForm.name.trim()) return;
 
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
     const payload = {
-      id: editingContact?.id || `contact-${Date.now()}`,
+      household_id: DEV_HOUSEHOLD_ID,
       name: contactForm.name.trim(),
-      relationship: contactForm.relationship.trim(),
-      phone: contactForm.phone.trim(),
-      email: contactForm.email.trim(),
-      address: contactForm.address.trim(),
+      relationship: contactForm.relationship.trim() || null,
+      phone: contactForm.phone.trim() || null,
+      email: contactForm.email.trim() || null,
+      address: contactForm.address.trim() || null,
     };
 
-    if (editingContact) {
-      setEmergencyContacts((prev) =>
-        prev.map((item) => (item.id === editingContact.id ? payload : item))
-      );
-    } else {
-      setEmergencyContacts((prev) => [payload, ...prev]);
-    }
+    try {
+      if (editingContact?.id) {
+        const { error } = await supabase
+          .from('emergency_contacts')
+          .update(payload)
+          .eq('id', editingContact.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('emergency_contacts').insert(payload);
+        if (error) throw error;
+      }
 
-    setContactDialogOpen(false);
-    resetContactForm();
+      setContactDialogOpen(false);
+      resetContactForm();
+      setSuccessText(editingContact ? 'Contact updated.' : 'Contact added.');
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to save contact.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveDoctor(e) {
+  async function handleSaveDoctor(e) {
     e.preventDefault();
     if (!doctorForm.name.trim()) return;
 
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
     const payload = {
-      id: editingDoctor?.id || `doctor-${Date.now()}`,
+      household_id: DEV_HOUSEHOLD_ID,
       name: doctorForm.name.trim(),
-      specialty: doctorForm.specialty.trim(),
-      phone: doctorForm.phone.trim(),
-      address: doctorForm.address.trim(),
+      specialty: doctorForm.specialty.trim() || null,
+      phone: doctorForm.phone.trim() || null,
+      address: doctorForm.address.trim() || null,
     };
 
-    if (editingDoctor) {
-      setDoctors((prev) =>
-        prev.map((item) => (item.id === editingDoctor.id ? payload : item))
-      );
-    } else {
-      setDoctors((prev) => [payload, ...prev]);
-    }
+    try {
+      if (editingDoctor?.id) {
+        const { error } = await supabase
+          .from('emergency_doctors')
+          .update(payload)
+          .eq('id', editingDoctor.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('emergency_doctors').insert(payload);
+        if (error) throw error;
+      }
 
-    setDoctorDialogOpen(false);
-    resetDoctorForm();
+      setDoctorDialogOpen(false);
+      resetDoctorForm();
+      setSuccessText(editingDoctor ? 'Doctor updated.' : 'Doctor added.');
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to save doctor.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveMedication(e) {
+  async function handleSaveMedication(e) {
     e.preventDefault();
     if (!medicationForm.name.trim()) return;
 
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
     const payload = {
-      id: editingMedication?.id || `med-${Date.now()}`,
+      household_id: DEV_HOUSEHOLD_ID,
       name: medicationForm.name.trim(),
-      person: medicationForm.person.trim(),
-      dosage: medicationForm.dosage.trim(),
-      prescriber: medicationForm.prescriber.trim(),
+      person: medicationForm.person.trim() || null,
+      dosage: medicationForm.dosage.trim() || null,
+      prescriber: medicationForm.prescriber.trim() || null,
     };
 
-    if (editingMedication) {
-      setMedications((prev) =>
-        prev.map((item) => (item.id === editingMedication.id ? payload : item))
-      );
-    } else {
-      setMedications((prev) => [payload, ...prev]);
-    }
+    try {
+      if (editingMedication?.id) {
+        const { error } = await supabase
+          .from('emergency_medications')
+          .update(payload)
+          .eq('id', editingMedication.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('emergency_medications').insert(payload);
+        if (error) throw error;
+      }
 
-    setMedicationDialogOpen(false);
-    resetMedicationForm();
+      setMedicationDialogOpen(false);
+      resetMedicationForm();
+      setSuccessText(editingMedication ? 'Medication updated.' : 'Medication added.');
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to save medication.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveInsurance(e) {
+  async function handleSaveInsurance(e) {
     e.preventDefault();
     if (!insuranceForm.type.trim()) return;
 
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
     const payload = {
-      id: editingInsurance?.id || `insurance-${Date.now()}`,
+      household_id: DEV_HOUSEHOLD_ID,
       type: insuranceForm.type.trim(),
-      provider: insuranceForm.provider.trim(),
-      policyNumber: insuranceForm.policyNumber.trim(),
-      groupNumber: insuranceForm.groupNumber.trim(),
+      provider: insuranceForm.provider.trim() || null,
+      policy_number: insuranceForm.policyNumber.trim() || null,
+      group_number: insuranceForm.groupNumber.trim() || null,
     };
 
-    if (editingInsurance) {
-      setInsuranceCards((prev) =>
-        prev.map((item) => (item.id === editingInsurance.id ? payload : item))
-      );
-    } else {
-      setInsuranceCards((prev) => [payload, ...prev]);
-    }
+    try {
+      if (editingInsurance?.id) {
+        const { error } = await supabase
+          .from('emergency_insurance_cards')
+          .update(payload)
+          .eq('id', editingInsurance.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('emergency_insurance_cards').insert(payload);
+        if (error) throw error;
+      }
 
-    setInsuranceDialogOpen(false);
-    resetInsuranceForm();
+      setInsuranceDialogOpen(false);
+      resetInsuranceForm();
+      setSuccessText(editingInsurance ? 'Insurance card updated.' : 'Insurance card added.');
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to save insurance card.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveLegal(e) {
+  async function handleSaveLegal(e) {
     e.preventDefault();
     if (!legalForm.title.trim()) return;
 
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
     const payload = {
-      id: editingLegal?.id || `legal-${Date.now()}`,
+      household_id: DEV_HOUSEHOLD_ID,
       title: legalForm.title.trim(),
       status: legalForm.status.trim() || 'Current',
-      lastUpdated: legalForm.lastUpdated.trim(),
+      last_updated: legalForm.lastUpdated.trim() || null,
     };
 
-    if (editingLegal) {
-      setLegalDirectives((prev) =>
-        prev.map((item) => (item.id === editingLegal.id ? payload : item))
-      );
-    } else {
-      setLegalDirectives((prev) => [payload, ...prev]);
-    }
+    try {
+      if (editingLegal?.id) {
+        const { error } = await supabase
+          .from('emergency_legal_directives')
+          .update(payload)
+          .eq('id', editingLegal.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('emergency_legal_directives').insert(payload);
+        if (error) throw error;
+      }
 
-    setLegalDialogOpen(false);
-    resetLegalForm();
+      setLegalDialogOpen(false);
+      resetLegalForm();
+      setSuccessText(editingLegal ? 'Directive updated.' : 'Directive added.');
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to save directive.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function handleSaveChecklistItem(e) {
+  async function handleSaveChecklistItem(e) {
     e.preventDefault();
     if (!checklistForm.item.trim()) return;
 
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
     const payload = {
-      id: `check-${Date.now()}`,
+      household_id: DEV_HOUSEHOLD_ID,
       item: checklistForm.item.trim(),
       checked: false,
     };
 
-    setCriticalChecklist((prev) => [...prev, payload]);
-    setChecklistDialogOpen(false);
-    resetChecklistForm();
+    try {
+      const { error } = await supabase.from('emergency_checklist_items').insert(payload);
+      if (error) throw error;
+
+      setChecklistDialogOpen(false);
+      resetChecklistForm();
+      setSuccessText('Checklist item added.');
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to add checklist item.');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function toggleChecklistItem(id) {
-    setCriticalChecklist((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, checked: !item.checked } : item
-      )
-    );
+  async function toggleChecklistItem(id, checked) {
+    setErrorText('');
+    setSuccessText('');
+
+    try {
+      const { error } = await supabase
+        .from('emergency_checklist_items')
+        .update({ checked: !checked })
+        .eq('id', id);
+
+      if (error) throw error;
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to update checklist item.');
+    }
   }
 
-  function handleDeleteConfirmed() {
+  async function handleDeleteConfirmed() {
     if (!deleteTarget) return;
 
-    const { type, id } = deleteTarget;
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
 
-    if (type === 'contact') {
-      setEmergencyContacts((prev) => prev.filter((item) => item.id !== id));
-    }
-    if (type === 'doctor') {
-      setDoctors((prev) => prev.filter((item) => item.id !== id));
-    }
-    if (type === 'medication') {
-      setMedications((prev) => prev.filter((item) => item.id !== id));
-    }
-    if (type === 'insurance') {
-      setInsuranceCards((prev) => prev.filter((item) => item.id !== id));
-    }
-    if (type === 'legal') {
-      setLegalDirectives((prev) => prev.filter((item) => item.id !== id));
-    }
-    if (type === 'checklist') {
-      setCriticalChecklist((prev) => prev.filter((item) => item.id !== id));
-    }
+    const tableMap = {
+      contact: 'emergency_contacts',
+      doctor: 'emergency_doctors',
+      medication: 'emergency_medications',
+      insurance: 'emergency_insurance_cards',
+      legal: 'emergency_legal_directives',
+      checklist: 'emergency_checklist_items',
+    };
 
-    setDeleteDialogOpen(false);
-    setDeleteTarget(null);
+    try {
+      const table = tableMap[deleteTarget.type];
+      const { error } = await supabase.from(table).delete().eq('id', deleteTarget.id);
+      if (error) throw error;
+
+      setDeleteDialogOpen(false);
+      setDeleteTarget(null);
+      setSuccessText('Item deleted.');
+      await loadEmergencyData();
+    } catch (error) {
+      setErrorText(error?.message || 'Failed to delete item.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -455,6 +620,21 @@ function EmergencyPage() {
             Add contact
           </Button>
         </div>
+
+        {(errorText || successText) && (
+          <div className="space-y-2">
+            {errorText ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {errorText}
+              </div>
+            ) : null}
+            {successText ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                {successText}
+              </div>
+            ) : null}
+          </div>
+        )}
 
         <div className="grid gap-4 md:grid-cols-3">
           <SummaryCard
@@ -501,7 +681,9 @@ function EmergencyPage() {
               </Button>
             </div>
 
-            {emergencyContacts.length ? (
+            {loading ? (
+              <LoadingCard text="Loading emergency contacts..." />
+            ) : emergencyContacts.length ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {emergencyContacts.map((contact) => (
                   <div key={contact.id} className="space-y-2">
@@ -553,7 +735,9 @@ function EmergencyPage() {
                 </Button>
               </div>
 
-              {doctors.length ? (
+              {loading ? (
+                <LoadingCard text="Loading doctors..." />
+              ) : doctors.length ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {doctors.map((doctor) => (
                     <Card key={doctor.id} className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
@@ -619,7 +803,9 @@ function EmergencyPage() {
                 </Button>
               </div>
 
-              {medications.length ? (
+              {loading ? (
+                <LoadingCard text="Loading medications..." />
+              ) : medications.length ? (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {medications.map((med) => (
                     <Card key={med.id} className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
@@ -677,7 +863,9 @@ function EmergencyPage() {
               </Button>
             </div>
 
-            {insuranceCards.length ? (
+            {loading ? (
+              <LoadingCard text="Loading insurance cards..." />
+            ) : insuranceCards.length ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {insuranceCards.map((card) => (
                   <Card key={card.id} className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
@@ -746,7 +934,9 @@ function EmergencyPage() {
               </Button>
             </div>
 
-            {legalDirectives.length ? (
+            {loading ? (
+              <LoadingCard text="Loading legal directives..." />
+            ) : legalDirectives.length ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {legalDirectives.map((directive) => (
                   <Card key={directive.id} className="rounded-2xl shadow-sm transition-all duration-200 hover:shadow-md">
@@ -818,7 +1008,9 @@ function EmergencyPage() {
 
             <Card className="rounded-2xl shadow-sm">
               <CardContent className="p-6">
-                {criticalChecklist.length ? (
+                {loading ? (
+                  <div className="text-sm text-muted-foreground">Loading checklist...</div>
+                ) : criticalChecklist.length ? (
                   <div className="space-y-3">
                     {criticalChecklist.map((item) => (
                       <div
@@ -828,10 +1020,10 @@ function EmergencyPage() {
                         <div className="flex items-start gap-3">
                           <Checkbox
                             checked={item.checked}
-                            onCheckedChange={() => toggleChecklistItem(item.id)}
+                            onCheckedChange={() => toggleChecklistItem(item.id, item.checked)}
                             className="mt-0.5"
                           />
-                          <span className="text-sm flex-1">{item.item}</span>
+                          <span className="flex-1 text-sm">{item.item}</span>
                         </div>
 
                         <Button
@@ -860,7 +1052,13 @@ function EmergencyPage() {
         </Tabs>
       </div>
 
-      <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
+      <Dialog
+        open={contactDialogOpen}
+        onOpenChange={(open) => {
+          setContactDialogOpen(open);
+          if (!open) resetContactForm();
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingContact ? 'Edit contact' : 'Add emergency contact'}</DialogTitle>
@@ -923,13 +1121,26 @@ function EmergencyPage() {
               <Button type="button" variant="outline" onClick={() => setContactDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">{editingContact ? 'Save changes' : 'Add contact'}</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingContact ? 'Save changes' : 'Add contact'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={doctorDialogOpen} onOpenChange={setDoctorDialogOpen}>
+      <Dialog
+        open={doctorDialogOpen}
+        onOpenChange={(open) => {
+          setDoctorDialogOpen(open);
+          if (!open) resetDoctorForm();
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingDoctor ? 'Edit doctor' : 'Add doctor'}</DialogTitle>
@@ -983,13 +1194,26 @@ function EmergencyPage() {
               <Button type="button" variant="outline" onClick={() => setDoctorDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">{editingDoctor ? 'Save changes' : 'Add doctor'}</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingDoctor ? 'Save changes' : 'Add doctor'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={medicationDialogOpen} onOpenChange={setMedicationDialogOpen}>
+      <Dialog
+        open={medicationDialogOpen}
+        onOpenChange={(open) => {
+          setMedicationDialogOpen(open);
+          if (!open) resetMedicationForm();
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingMedication ? 'Edit medication' : 'Add medication'}</DialogTitle>
@@ -1043,13 +1267,26 @@ function EmergencyPage() {
               <Button type="button" variant="outline" onClick={() => setMedicationDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">{editingMedication ? 'Save changes' : 'Add medication'}</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingMedication ? 'Save changes' : 'Add medication'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={insuranceDialogOpen} onOpenChange={setInsuranceDialogOpen}>
+      <Dialog
+        open={insuranceDialogOpen}
+        onOpenChange={(open) => {
+          setInsuranceDialogOpen(open);
+          if (!open) resetInsuranceForm();
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingInsurance ? 'Edit insurance card' : 'Add insurance card'}</DialogTitle>
@@ -1103,13 +1340,26 @@ function EmergencyPage() {
               <Button type="button" variant="outline" onClick={() => setInsuranceDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">{editingInsurance ? 'Save changes' : 'Add insurance card'}</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingInsurance ? 'Save changes' : 'Add insurance card'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={legalDialogOpen} onOpenChange={setLegalDialogOpen}>
+      <Dialog
+        open={legalDialogOpen}
+        onOpenChange={(open) => {
+          setLegalDialogOpen(open);
+          if (!open) resetLegalForm();
+        }}
+      >
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingLegal ? 'Edit directive' : 'Add legal directive'}</DialogTitle>
@@ -1155,13 +1405,26 @@ function EmergencyPage() {
               <Button type="button" variant="outline" onClick={() => setLegalDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">{editingLegal ? 'Save changes' : 'Add directive'}</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingLegal ? 'Save changes' : 'Add directive'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={checklistDialogOpen} onOpenChange={setChecklistDialogOpen}>
+      <Dialog
+        open={checklistDialogOpen}
+        onOpenChange={(open) => {
+          setChecklistDialogOpen(open);
+          if (!open) resetChecklistForm();
+        }}
+      >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Add checklist item</DialogTitle>
@@ -1184,7 +1447,14 @@ function EmergencyPage() {
               <Button type="button" variant="outline" onClick={() => setChecklistDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit">Add item</Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : 'Add item'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -1214,8 +1484,13 @@ function EmergencyPage() {
             >
               Cancel
             </Button>
-            <Button type="button" variant="destructive" onClick={handleDeleteConfirmed}>
-              Delete
+            <Button type="button" variant="destructive" onClick={handleDeleteConfirmed} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1265,6 +1540,16 @@ function EmptyState({ icon, title, description, actionLabel, onAction }) {
             {actionLabel}
           </Button>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+function LoadingCard({ text }) {
+  return (
+    <Card className="rounded-2xl shadow-sm">
+      <CardContent className="p-6 text-sm text-muted-foreground">
+        {text}
       </CardContent>
     </Card>
   );
