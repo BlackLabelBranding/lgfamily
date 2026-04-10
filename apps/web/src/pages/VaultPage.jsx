@@ -99,11 +99,11 @@ function VaultPage() {
   }
 
   const documentsByCategory = useMemo(() => {
-    const map = {};
+    const grouped = {};
     for (const category of CATEGORY_TABS) {
-      map[category] = documents.filter((doc) => doc.category === category);
+      grouped[category] = documents.filter((doc) => doc.category === category);
     }
-    return map;
+    return grouped;
   }, [documents]);
 
   function resetForm() {
@@ -126,7 +126,7 @@ function VaultPage() {
   }
 
   function buildStoragePath({ category, fileName }) {
-    const safeCategory = sanitizeSegment(category || 'Uncategorized');
+    const safeCategory = sanitizeSegment(category || 'uncategorized');
     const safeFileName = sanitizeFileName(fileName);
     return `households/${DEV_HOUSEHOLD_ID}/vault/${safeCategory}/${Date.now()}-${safeFileName}`;
   }
@@ -139,9 +139,7 @@ function VaultPage() {
 
     const { error: uploadError } = await supabase.storage
       .from(STORAGE_BUCKET)
-      .upload(filePath, file, {
-        upsert: false,
-      });
+      .upload(filePath, file, { upsert: false });
 
     if (uploadError) {
       throw uploadError;
@@ -304,7 +302,7 @@ function VaultPage() {
               <div className="mb-6 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                 <div>
                   <h1 className="mb-2 text-3xl font-bold tracking-tight">
-                    Family vault
+                    Family Vault
                   </h1>
                   <p className="text-muted-foreground">
                     Secure document storage for important household records.
@@ -326,98 +324,76 @@ function VaultPage() {
               {(errorMessage || successMessage) && (
                 <div className="mb-6 space-y-2">
                   {errorMessage ? (
-                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                    <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700">
                       {errorMessage}
                     </div>
                   ) : null}
 
                   {successMessage ? (
-                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
                       {successMessage}
                     </div>
                   ) : null}
                 </div>
               )}
 
-              <section className="rounded-3xl border border-white/10 bg-[hsl(var(--vault-bg))] p-4 shadow-sm sm:p-6 lg:p-8">
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-[hsl(var(--vault-foreground))]">
-                      Family vault
-                    </h2>
-                    <p className="mt-1 text-[hsl(var(--vault-muted))]">
-                      Store IDs, insurance records, legal files, medical documents, and more.
-                    </p>
-                  </div>
-
-                  <Button
-                    className="gap-2 rounded-xl"
-                    onClick={() => {
-                      resetForm();
-                      setIsAddOpen(true);
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add document
-                  </Button>
-                </div>
-
-                <Tabs
-                  value={activeTab}
-                  onValueChange={setActiveTab}
-                  className="space-y-6"
-                >
-                  <TabsList className="grid h-auto w-full grid-cols-2 rounded-2xl bg-[hsl(var(--vault-surface))] p-1 sm:grid-cols-4 lg:grid-cols-7">
-                    {CATEGORY_TABS.map((category) => (
-                      <TabsTrigger
-                        key={category}
-                        value={category}
-                        className="rounded-xl text-xs sm:text-sm"
-                      >
-                        {category}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
-
+              <Tabs
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="space-y-6"
+              >
+                <TabsList className="grid h-auto w-full grid-cols-2 rounded-2xl bg-muted p-1 sm:grid-cols-4 lg:grid-cols-7">
                   {CATEGORY_TABS.map((category) => (
-                    <TabsContent
+                    <TabsTrigger
                       key={category}
                       value={category}
-                      className="space-y-4"
+                      className="rounded-xl text-xs sm:text-sm"
                     >
-                      {isLoading ? (
-                        <div className="rounded-3xl border border-white/10 bg-white/5 p-12 text-center text-sm text-[hsl(var(--vault-muted))]">
-                          Loading documents...
-                        </div>
-                      ) : documentsByCategory[category]?.length ? (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                          {documentsByCategory[category].map((doc) => (
-                            <VaultDocumentCard
-                              key={doc.id}
-                              document={doc}
-                              onView={() => handleViewDocument(doc)}
-                              onDownload={() => handleDownloadDocument(doc)}
-                              onDelete={() => openDeleteDialog(doc)}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <EmptyVaultState
-                          category={category}
-                          onAdd={() => {
-                            resetForm();
-                            setFormData((prev) => ({
-                              ...prev,
-                              category,
-                            }));
-                            setIsAddOpen(true);
-                          }}
-                        />
-                      )}
-                    </TabsContent>
+                      {category}
+                    </TabsTrigger>
                   ))}
-                </Tabs>
-              </section>
+                </TabsList>
+
+                {CATEGORY_TABS.map((category) => (
+                  <TabsContent
+                    key={category}
+                    value={category}
+                    className="space-y-4"
+                  >
+                    {isLoading ? (
+                      <Card className="rounded-3xl shadow-sm">
+                        <CardContent className="p-12 text-center text-sm text-muted-foreground">
+                          Loading documents...
+                        </CardContent>
+                      </Card>
+                    ) : documentsByCategory[category]?.length ? (
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        {documentsByCategory[category].map((doc) => (
+                          <VaultDocumentCard
+                            key={doc.id}
+                            document={doc}
+                            onView={() => handleViewDocument(doc)}
+                            onDownload={() => handleDownloadDocument(doc)}
+                            onDelete={() => openDeleteDialog(doc)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyVaultState
+                        category={category}
+                        onAdd={() => {
+                          resetForm();
+                          setFormData((prev) => ({
+                            ...prev,
+                            category,
+                          }));
+                          setIsAddOpen(true);
+                        }}
+                      />
+                    )}
+                  </TabsContent>
+                ))}
+              </Tabs>
             </div>
           </main>
         </div>
@@ -470,7 +446,9 @@ function VaultPage() {
               <Field label="Subcategory">
                 <input
                   value={formData.subcategory}
-                  onChange={(e) => handleInputChange('subcategory', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('subcategory', e.target.value)
+                  }
                   placeholder="Example: Passport, License, Policy"
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 />
@@ -479,7 +457,9 @@ function VaultPage() {
               <Field label="Permission">
                 <select
                   value={formData.permission}
-                  onChange={(e) => handleInputChange('permission', e.target.value)}
+                  onChange={(e) =>
+                    handleInputChange('permission', e.target.value)
+                  }
                   className="h-10 w-full rounded-md border bg-background px-3 text-sm"
                 >
                   <option value="Admin Only">Admin Only</option>
@@ -579,7 +559,8 @@ function VaultPage() {
           <DialogHeader>
             <DialogTitle>Are you sure?</DialogTitle>
             <DialogDescription>
-              This will permanently delete this document from the vault and remove the stored file.
+              This will permanently delete this document from the vault and remove
+              the stored file.
             </DialogDescription>
           </DialogHeader>
 
@@ -622,14 +603,14 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
   return (
     <Card
       className={cn(
-        'rounded-2xl border-white/10 bg-white shadow-sm transition-all duration-200 hover:shadow-md',
-        isExpiringSoon && 'border-accent'
+        'rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md',
+        isExpiringSoon && 'border-amber-300'
       )}
     >
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-muted">
-            <FileText className="h-6 w-6 text-muted-foreground" />
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-slate-100">
+            <FileText className="h-6 w-6 text-slate-500" />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -652,12 +633,12 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
               {document.expiration_date ? (
                 <div className="flex items-center gap-2 text-xs">
                   {isExpiringSoon ? (
-                    <AlertCircle className="h-3 w-3 text-accent" />
+                    <AlertCircle className="h-3 w-3 text-amber-500" />
                   ) : null}
                   <span
                     className={cn(
                       'text-muted-foreground',
-                      isExpiringSoon && 'font-medium text-accent'
+                      isExpiringSoon && 'font-medium text-amber-600'
                     )}
                   >
                     Expires: {formatDisplayDate(document.expiration_date)}
@@ -717,17 +698,17 @@ function VaultDocumentCard({ document, onView, onDownload, onDelete }) {
 
 function EmptyVaultState({ category, onAdd }) {
   return (
-    <Card className="rounded-3xl border border-white/10 bg-white/5 shadow-none">
+    <Card className="rounded-3xl border border-dashed shadow-sm">
       <CardContent className="flex min-h-[260px] flex-col items-center justify-center px-6 py-12 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/10">
-          <FileText className="h-6 w-6 text-[hsl(var(--vault-muted))]" />
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
+          <FileText className="h-6 w-6 text-slate-500" />
         </div>
 
-        <h3 className="mb-2 text-lg font-semibold text-[hsl(var(--vault-foreground))]">
+        <h3 className="mb-2 text-lg font-semibold">
           No {category.toLowerCase()} documents yet
         </h3>
 
-        <p className="mb-5 max-w-md text-sm text-[hsl(var(--vault-muted))]">
+        <p className="mb-5 max-w-md text-sm text-muted-foreground">
           Add your first document to this section of the family vault.
         </p>
 
