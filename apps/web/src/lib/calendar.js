@@ -2,9 +2,14 @@ import { supabase } from '@/lib/supabaseClient.js';
 
 const DEV_HOUSEHOLD_ID = 'd2b8464e-a258-46a0-89de-a1b921062943';
 const DEFAULT_TIMEZONE = 'America/Chicago';
+const DEV_USER_ID = 'dev-user-lance';
 
 function getHouseholdId() {
   return DEV_HOUSEHOLD_ID;
+}
+
+function getCurrentUserId() {
+  return DEV_USER_ID;
 }
 
 function normalizeEvent(row) {
@@ -24,8 +29,23 @@ function normalizeEvent(row) {
     status: row.status || 'confirmed',
     source: row.source || 'familyhub',
     google_html_link: row.google_html_link || '',
+    created_by_user_id: row.created_by_user_id || '',
+    visibility: row.visibility || 'household',
+    sync_scope: row.sync_scope || 'creator_only',
     created_at: row.created_at,
     updated_at: row.updated_at,
+  };
+}
+
+function normalizeAudience(row) {
+  if (!row) return row;
+
+  return {
+    id: row.id,
+    family_event_id: row.family_event_id,
+    user_id: row.user_id,
+    role: row.role || 'viewer',
+    created_at: row.created_at || null,
   };
 }
 
@@ -35,6 +55,7 @@ function normalizeConnection(row) {
   return {
     id: row.id,
     household_id: row.household_id,
+    user_id: row.user_id || '',
     provider: row.provider || 'google',
     provider_account_email: row.provider_account_email || '',
     provider_calendar_id: row.provider_calendar_id || 'primary',
@@ -100,7 +121,66 @@ function normalizeEventPayload(payload) {
     google_html_link: payload.google_html_link
       ? String(payload.google_html_link).trim()
       : null,
+    created_by_user_id: payload.created_by_user_id || getCurrentUserId(),
+    visibility: payload.visibility || 'household',
+    sync_scope: payload.sync_scope || 'creator_only',
   };
+}
+
+function sanitizeAudienceUserIds(userIds = []) {
+  return [...new Set((userIds || []).filter(Boolean))];
+}
+
+function canUserSeeEvent(event, audienceUserIds = [], userId = getCurrentUserId()) {
+  if (!event) return false;
+  if (event.visibility === 'household') return true;
+  if (event.visibility === 'private') {
+    return event.created_by_user_id === userId;
+  }
+  if (event.visibility === 'selected_members') {
+    return audienceUserIds.includes(userId) || event.created_by_user_id === userId;
+  }
+  return true;
+}
+
+/* -------------------- AUDIENCE -------------------- */
+
+export async function getEventAudience(familyEventId) {
+  const { data, error } = await supabase
+    .from('family_event_audience')
+    .select('*')
+    .eq('family_event_id', familyEventId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map(normalizeAudience);
+}
+
+export async function replaceEventAudience(familyEventId, userIds = []) {
+  const cleaned = sanitizeAudienceUserIds(userIds);
+
+  const { error: deleteError } = await supabase
+    .from('family_event_audience')
+    .delete()
+    .eq('family_event_id', familyEventId);
+
+  if (deleteError) throw deleteError;
+
+  if (!cleaned.length) return [];
+
+  const rows = cleaned.map((user_id) => ({
+    family_event_id: familyEventId,
+    user_id,
+    role: 'viewer',
+  }));
+
+  const { data, error } = await supabase
+    .from('family_event_audience')
+    .insert(rows)
+    .select('*');
+
+  if (error) throw error;
+  return (data || []).map(normalizeAudience);
 }
 
 /* -------------------- EVENTS -------------------- */
@@ -112,6 +192,8 @@ export async function getCalendarEvents(options = {}) {
     endAt,
     includeCancelled = false,
     orderAscending = true,
+    onlyVisibleToCurrentUser = false,
+    userId = getCurrentUserId(),
   } = options;
 
   let query = supabase
@@ -136,7 +218,34 @@ export async function getCalendarEvents(options = {}) {
   const { data, error } = await query;
   if (error) throw error;
 
-  return (data || []).map(normalizeEvent);
+  const events = (data || []).map(normalizeEvent);
+
+  if (!onlyVisibleToCurrentUser) {
+    return events;
+  }
+
+  const ids = events.map((event) => event.id);
+  let audienceMap = new Map();
+
+  if (ids.length) {
+    const { data: audienceRows, error: audienceError } = await supabase
+      .from('family_event_audience')
+      .select('*')
+      .in('family_event_id', ids);
+
+    if (audienceError) throw audienceError;
+
+    audienceMap = (audienceRows || []).reduce((map, row) => {
+      const list = map.get(row.family_event_id) || [];
+      list.push(row.user_id);
+      map.set(row.family_event_id, list);
+      return map;
+    }, new Map());
+  }
+
+  return events.filter((event) =>
+    canUserSeeEvent(event, audienceMap.get(event.id) || [], userId)
+  );
 }
 
 export async function getCalendarEventById(id) {
@@ -150,7 +259,15 @@ export async function getCalendarEventById(id) {
     .single();
 
   if (error) throw error;
-  return normalizeEvent(data);
+
+  const event = normalizeEvent(data);
+  const audience = await getEventAudience(id);
+
+  return {
+    ...event,
+    audience,
+    audience_user_ids: audience.map((item) => item.user_id),
+  };
 }
 
 export async function addCalendarEvent(payload) {
@@ -163,7 +280,15 @@ export async function addCalendarEvent(payload) {
     .single();
 
   if (error) throw error;
-  return normalizeEvent(data);
+
+  const event = normalizeEvent(data);
+  const audience = await replaceEventAudience(event.id, payload.audience_user_ids || []);
+
+  return {
+    ...event,
+    audience,
+    audience_user_ids: audience.map((item) => item.user_id),
+  };
 }
 
 export async function updateCalendarEvent(id, payload) {
@@ -180,7 +305,15 @@ export async function updateCalendarEvent(id, payload) {
     .single();
 
   if (error) throw error;
-  return normalizeEvent(data);
+
+  const event = normalizeEvent(data);
+  const audience = await replaceEventAudience(id, payload.audience_user_ids || []);
+
+  return {
+    ...event,
+    audience,
+    audience_user_ids: audience.map((item) => item.user_id),
+  };
 }
 
 export async function deleteCalendarEvent(id) {
@@ -218,7 +351,21 @@ export async function getCalendarConnections() {
   return (data || []).map(normalizeConnection);
 }
 
-export async function getPrimaryGoogleConnection() {
+export async function getCalendarConnectionsForUser(userId = getCurrentUserId()) {
+  const householdId = getHouseholdId();
+
+  const { data, error } = await supabase
+    .from('calendar_connections')
+    .select('*')
+    .eq('household_id', householdId)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map(normalizeConnection);
+}
+
+export async function getPrimaryGoogleConnection(userId = getCurrentUserId()) {
   const householdId = getHouseholdId();
 
   const { data, error } = await supabase
@@ -226,6 +373,7 @@ export async function getPrimaryGoogleConnection() {
     .select('*')
     .eq('household_id', householdId)
     .eq('provider', 'google')
+    .eq('user_id', userId)
     .eq('is_enabled', true)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -240,6 +388,7 @@ export async function upsertCalendarConnection(payload) {
 
   const row = {
     household_id: householdId,
+    user_id: payload.user_id || getCurrentUserId(),
     provider: payload.provider || 'google',
     provider_account_email: payload.provider_account_email || null,
     provider_calendar_id: payload.provider_calendar_id || 'primary',
@@ -496,7 +645,7 @@ export async function logCalendarWebhookEvent(payload) {
 export async function getCalendarPageData(options = {}) {
   const [events, connection, jobs] = await Promise.all([
     getCalendarEvents(options),
-    getPrimaryGoogleConnection(),
+    getPrimaryGoogleConnection(options.userId || getCurrentUserId()),
     getCalendarSyncJobs(10),
   ]);
 
@@ -516,6 +665,10 @@ export function toAllDayEventPayload({
   timezone = DEFAULT_TIMEZONE,
   recurrence = '',
   source = 'familyhub',
+  created_by_user_id = getCurrentUserId(),
+  visibility = 'household',
+  sync_scope = 'creator_only',
+  audience_user_ids = [],
 }) {
   return {
     title,
@@ -528,6 +681,10 @@ export function toAllDayEventPayload({
     recurrence,
     status: 'confirmed',
     source,
+    created_by_user_id,
+    visibility,
+    sync_scope,
+    audience_user_ids,
   };
 }
 
@@ -540,6 +697,10 @@ export function toTimedEventPayload({
   timezone = DEFAULT_TIMEZONE,
   recurrence = '',
   source = 'familyhub',
+  created_by_user_id = getCurrentUserId(),
+  visibility = 'household',
+  sync_scope = 'creator_only',
+  audience_user_ids = [],
 }) {
   return {
     title,
@@ -552,5 +713,36 @@ export function toTimedEventPayload({
     recurrence,
     status: 'confirmed',
     source,
+    created_by_user_id,
+    visibility,
+    sync_scope,
+    audience_user_ids,
   };
+}
+
+export function getSyncTargetUserIds(event, audienceUserIds = []) {
+  const creatorId = event.created_by_user_id;
+  const audience = sanitizeAudienceUserIds(audienceUserIds);
+
+  if (event.sync_scope === 'none') return [];
+  if (event.sync_scope === 'creator_only') return creatorId ? [creatorId] : [];
+  if (event.sync_scope === 'selected_users') return audience;
+  if (event.sync_scope === 'all_connected_users') return ['ALL_CONNECTED_USERS'];
+  return creatorId ? [creatorId] : [];
+}
+
+export function isValidSyncScopeForVisibility(visibility, syncScope) {
+  if (visibility === 'private') {
+    return syncScope === 'none' || syncScope === 'creator_only';
+  }
+
+  if (visibility === 'selected_members') {
+    return (
+      syncScope === 'none' ||
+      syncScope === 'creator_only' ||
+      syncScope === 'selected_users'
+    );
+  }
+
+  return true;
 }
