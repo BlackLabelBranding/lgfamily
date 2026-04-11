@@ -1,200 +1,556 @@
+import { supabase } from '@/lib/supabaseClient.js';
 
-import React, { useState } from 'react';
-import { Helmet } from 'react-helmet';
-import Sidebar from '@/components/Sidebar.jsx';
-import Header from '@/components/Header.jsx';
-import EventCard from '@/components/EventCard.jsx';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Calendar, Grid3x3, List, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+const DEV_HOUSEHOLD_ID = 'd2b8464e-a258-46a0-89de-a1b921062943';
+const DEFAULT_TIMEZONE = 'America/Chicago';
 
-function CalendarPage() {
-  const [view, setView] = useState('month');
-  const [selectedMember, setSelectedMember] = useState('all');
-  const [selectedType, setSelectedType] = useState('all');
-
-  const events = [
-    { id: 1, title: "Emma's soccer practice", time: "Apr 4, 4:30 PM", type: "activity", location: "Riverside Field", attendees: [{ initials: "E" }] },
-    { id: 2, title: "Family dinner", time: "Apr 4, 7:00 PM", type: "family", attendees: [{ initials: "S" }, { initials: "M" }, { initials: "E" }, { initials: "L" }] },
-    { id: 3, title: "Lucas's piano lesson", time: "Apr 5, 3:00 PM", type: "activity", location: "Music Academy", attendees: [{ initials: "L" }] },
-    { id: 4, title: "Doctor appointment", time: "Apr 6, 10:00 AM", type: "appointment", location: "City Medical Center", attendees: [{ initials: "M" }] },
-    { id: 5, title: "Parent-teacher conference", time: "Apr 8, 2:00 PM", type: "school", location: "Oakwood Elementary", attendees: [{ initials: "S" }, { initials: "M" }] },
-  ];
-
-  return (
-    <>
-      <Helmet>
-        <title>Calendar - FamilyHub</title>
-        <meta name="description" content="Family calendar with events, appointments, and activities" />
-      </Helmet>
-      
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex-1 lg:ml-64">
-          <Header />
-          <main className="p-4 sm:p-6 lg:p-8">
-            <div className="max-w-7xl mx-auto">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h1 className="text-3xl font-bold mb-2" style={{letterSpacing: '-0.02em'}}>Family calendar</h1>
-                  <p className="text-muted-foreground">Manage events and appointments</p>
-                </div>
-                <Button className="gap-2 touch-target">
-                  <Plus className="h-4 w-4" />
-                  Add event
-                </Button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Calendar View */}
-                <Card className="lg:col-span-2">
-                  <CardHeader>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <CardTitle className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5 text-primary" />
-                        April 2026
-                      </CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="icon" className="h-9 w-9">
-                          <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-9 w-9">
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mt-4">
-                      <Button
-                        variant={view === 'month' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setView('month')}
-                        className="gap-1"
-                      >
-                        <Grid3x3 className="h-4 w-4" />
-                        Month
-                      </Button>
-                      <Button
-                        variant={view === 'week' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setView('week')}
-                        className="gap-1"
-                      >
-                        <List className="h-4 w-4" />
-                        Week
-                      </Button>
-                      <Button
-                        variant={view === 'day' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setView('day')}
-                        className="gap-1"
-                      >
-                        <Calendar className="h-4 w-4" />
-                        Day
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {/* Simple month grid */}
-                    <div className="grid grid-cols-7 gap-2 mb-4">
-                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                        <div key={day} className="text-center text-xs font-medium text-muted-foreground p-2">
-                          {day}
-                        </div>
-                      ))}
-                      {Array.from({ length: 35 }, (_, i) => {
-                        const day = i - 2; // April 1 starts on Tuesday
-                        const isCurrentMonth = day >= 1 && day <= 30;
-                        const isToday = day === 4;
-                        const hasEvent = [4, 5, 6, 8].includes(day);
-                        
-                        return (
-                          <div
-                            key={i}
-                            className={`aspect-square p-2 rounded-lg text-center text-sm transition-all duration-200 ${
-                              isCurrentMonth
-                                ? 'hover:bg-muted cursor-pointer'
-                                : 'text-muted-foreground/40'
-                            } ${isToday ? 'bg-primary text-primary-foreground font-semibold' : ''}`}
-                          >
-                            {isCurrentMonth && (
-                              <>
-                                <div>{day}</div>
-                                {hasEvent && (
-                                  <div className="flex justify-center gap-0.5 mt-1">
-                                    <div className="w-1 h-1 rounded-full bg-secondary" />
-                                  </div>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Filters & Events */}
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Filters</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Family member</label>
-                        <Select value={selectedMember} onValueChange={setSelectedMember}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All members</SelectItem>
-                            <SelectItem value="sarah">Sarah (Mom)</SelectItem>
-                            <SelectItem value="michael">Michael (Dad)</SelectItem>
-                            <SelectItem value="emma">Emma</SelectItem>
-                            <SelectItem value="lucas">Lucas</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium mb-2 block">Event type</label>
-                        <Select value={selectedType} onValueChange={setSelectedType}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All types</SelectItem>
-                            <SelectItem value="appointment">Appointments</SelectItem>
-                            <SelectItem value="activity">Activities</SelectItem>
-                            <SelectItem value="school">School</SelectItem>
-                            <SelectItem value="family">Family</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Upcoming events</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {events.map(event => (
-                          <EventCard key={event.id} event={event} />
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    </>
-  );
+function getHouseholdId() {
+  return DEV_HOUSEHOLD_ID;
 }
 
-export default CalendarPage;
+function normalizeEvent(row) {
+  if (!row) return row;
+
+  return {
+    id: row.id,
+    household_id: row.household_id,
+    title: row.title || '',
+    description: row.description || '',
+    location: row.location || '',
+    start_at: row.start_at,
+    end_at: row.end_at,
+    all_day: !!row.all_day,
+    timezone: row.timezone || DEFAULT_TIMEZONE,
+    recurrence: row.recurrence || '',
+    status: row.status || 'confirmed',
+    source: row.source || 'familyhub',
+    google_html_link: row.google_html_link || '',
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeConnection(row) {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    household_id: row.household_id,
+    provider: row.provider || 'google',
+    provider_account_email: row.provider_account_email || '',
+    provider_calendar_id: row.provider_calendar_id || 'primary',
+    access_token: row.access_token || '',
+    refresh_token: row.refresh_token || '',
+    token_expires_at: row.token_expires_at || null,
+    sync_token: row.sync_token || '',
+    watch_channel_id: row.watch_channel_id || '',
+    watch_resource_id: row.watch_resource_id || '',
+    watch_expiration: row.watch_expiration || null,
+    is_enabled: !!row.is_enabled,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function normalizeSync(row) {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    family_event_id: row.family_event_id,
+    connection_id: row.connection_id,
+    provider: row.provider || 'google',
+    provider_calendar_id: row.provider_calendar_id || 'primary',
+    provider_event_id: row.provider_event_id || '',
+    provider_etag: row.provider_etag || '',
+    provider_updated_at: row.provider_updated_at || null,
+    sync_state: row.sync_state || 'synced',
+    last_synced_at: row.last_synced_at || null,
+  };
+}
+
+function normalizeJob(row) {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    household_id: row.household_id,
+    connection_id: row.connection_id || null,
+    direction: row.direction,
+    status: row.status,
+    message: row.message || '',
+    started_at: row.started_at || null,
+    finished_at: row.finished_at || null,
+    created_at: row.created_at || null,
+  };
+}
+
+function normalizeEventPayload(payload) {
+  return {
+    household_id: getHouseholdId(),
+    title: String(payload.title || '').trim(),
+    description: payload.description ? String(payload.description).trim() : null,
+    location: payload.location ? String(payload.location).trim() : null,
+    start_at: payload.start_at,
+    end_at: payload.end_at,
+    all_day: !!payload.all_day,
+    timezone: payload.timezone || DEFAULT_TIMEZONE,
+    recurrence: payload.recurrence ? String(payload.recurrence).trim() : null,
+    status: payload.status || 'confirmed',
+    source: payload.source || 'familyhub',
+    google_html_link: payload.google_html_link
+      ? String(payload.google_html_link).trim()
+      : null,
+  };
+}
+
+/* -------------------- EVENTS -------------------- */
+
+export async function getCalendarEvents(options = {}) {
+  const householdId = getHouseholdId();
+  const {
+    startAt,
+    endAt,
+    includeCancelled = false,
+    orderAscending = true,
+  } = options;
+
+  let query = supabase
+    .from('family_events')
+    .select('*')
+    .eq('household_id', householdId);
+
+  if (!includeCancelled) {
+    query = query.neq('status', 'cancelled');
+  }
+
+  if (startAt) {
+    query = query.gte('start_at', startAt);
+  }
+
+  if (endAt) {
+    query = query.lte('start_at', endAt);
+  }
+
+  query = query.order('start_at', { ascending: orderAscending });
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data || []).map(normalizeEvent);
+}
+
+export async function getCalendarEventById(id) {
+  const householdId = getHouseholdId();
+
+  const { data, error } = await supabase
+    .from('family_events')
+    .select('*')
+    .eq('household_id', householdId)
+    .eq('id', id)
+    .single();
+
+  if (error) throw error;
+  return normalizeEvent(data);
+}
+
+export async function addCalendarEvent(payload) {
+  const normalized = normalizeEventPayload(payload);
+
+  const { data, error } = await supabase
+    .from('family_events')
+    .insert(normalized)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeEvent(data);
+}
+
+export async function updateCalendarEvent(id, payload) {
+  const updates = {
+    ...normalizeEventPayload(payload),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('family_events')
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeEvent(data);
+}
+
+export async function deleteCalendarEvent(id) {
+  const { error } = await supabase.from('family_events').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function setCalendarEventStatus(id, status) {
+  const { data, error } = await supabase
+    .from('family_events')
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeEvent(data);
+}
+
+/* -------------------- CONNECTIONS -------------------- */
+
+export async function getCalendarConnections() {
+  const householdId = getHouseholdId();
+
+  const { data, error } = await supabase
+    .from('calendar_connections')
+    .select('*')
+    .eq('household_id', householdId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map(normalizeConnection);
+}
+
+export async function getPrimaryGoogleConnection() {
+  const householdId = getHouseholdId();
+
+  const { data, error } = await supabase
+    .from('calendar_connections')
+    .select('*')
+    .eq('household_id', householdId)
+    .eq('provider', 'google')
+    .eq('is_enabled', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return normalizeConnection(data);
+}
+
+export async function upsertCalendarConnection(payload) {
+  const householdId = getHouseholdId();
+
+  const row = {
+    household_id: householdId,
+    provider: payload.provider || 'google',
+    provider_account_email: payload.provider_account_email || null,
+    provider_calendar_id: payload.provider_calendar_id || 'primary',
+    access_token: payload.access_token || null,
+    refresh_token: payload.refresh_token || null,
+    token_expires_at: payload.token_expires_at || null,
+    sync_token: payload.sync_token || null,
+    watch_channel_id: payload.watch_channel_id || null,
+    watch_resource_id: payload.watch_resource_id || null,
+    watch_expiration: payload.watch_expiration || null,
+    is_enabled:
+      typeof payload.is_enabled === 'boolean' ? payload.is_enabled : true,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (payload.id) {
+    const { data, error } = await supabase
+      .from('calendar_connections')
+      .update(row)
+      .eq('id', payload.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return normalizeConnection(data);
+  }
+
+  const { data, error } = await supabase
+    .from('calendar_connections')
+    .insert(row)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeConnection(data);
+}
+
+export async function updateCalendarConnectionTokens(id, payload) {
+  const { data, error } = await supabase
+    .from('calendar_connections')
+    .update({
+      access_token: payload.access_token || null,
+      refresh_token: payload.refresh_token || null,
+      token_expires_at: payload.token_expires_at || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeConnection(data);
+}
+
+export async function updateCalendarConnectionSyncState(id, payload) {
+  const { data, error } = await supabase
+    .from('calendar_connections')
+    .update({
+      sync_token: payload.sync_token || null,
+      watch_channel_id: payload.watch_channel_id || null,
+      watch_resource_id: payload.watch_resource_id || null,
+      watch_expiration: payload.watch_expiration || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeConnection(data);
+}
+
+export async function setCalendarConnectionEnabled(id, isEnabled) {
+  const { data, error } = await supabase
+    .from('calendar_connections')
+    .update({
+      is_enabled: !!isEnabled,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeConnection(data);
+}
+
+export async function deleteCalendarConnection(id) {
+  const { error } = await supabase
+    .from('calendar_connections')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/* -------------------- EVENT SYNC MAP -------------------- */
+
+export async function getEventSyncByFamilyEventId(familyEventId) {
+  const { data, error } = await supabase
+    .from('family_event_sync')
+    .select('*')
+    .eq('family_event_id', familyEventId)
+    .order('last_synced_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map(normalizeSync);
+}
+
+export async function getEventSyncByProviderEventId(
+  connectionId,
+  providerCalendarId,
+  providerEventId
+) {
+  const { data, error } = await supabase
+    .from('family_event_sync')
+    .select('*')
+    .eq('connection_id', connectionId)
+    .eq('provider_calendar_id', providerCalendarId)
+    .eq('provider_event_id', providerEventId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return normalizeSync(data);
+}
+
+export async function upsertEventSync(payload) {
+  const row = {
+    family_event_id: payload.family_event_id,
+    connection_id: payload.connection_id,
+    provider: payload.provider || 'google',
+    provider_calendar_id: payload.provider_calendar_id || 'primary',
+    provider_event_id: payload.provider_event_id,
+    provider_etag: payload.provider_etag || null,
+    provider_updated_at: payload.provider_updated_at || null,
+    sync_state: payload.sync_state || 'synced',
+    last_synced_at: new Date().toISOString(),
+  };
+
+  if (payload.id) {
+    const { data, error } = await supabase
+      .from('family_event_sync')
+      .update(row)
+      .eq('id', payload.id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return normalizeSync(data);
+  }
+
+  const { data, error } = await supabase
+    .from('family_event_sync')
+    .upsert(row, {
+      onConflict: 'family_event_id,connection_id',
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeSync(data);
+}
+
+export async function deleteEventSyncByFamilyEventId(familyEventId) {
+  const { error } = await supabase
+    .from('family_event_sync')
+    .delete()
+    .eq('family_event_id', familyEventId);
+
+  if (error) throw error;
+}
+
+export async function deleteEventSyncById(id) {
+  const { error } = await supabase
+    .from('family_event_sync')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/* -------------------- SYNC JOBS -------------------- */
+
+export async function createCalendarSyncJob(payload) {
+  const { data, error } = await supabase
+    .from('calendar_sync_jobs')
+    .insert({
+      household_id: getHouseholdId(),
+      connection_id: payload.connection_id || null,
+      direction: payload.direction,
+      status: payload.status || 'pending',
+      message: payload.message || null,
+      started_at: payload.started_at || null,
+      finished_at: payload.finished_at || null,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeJob(data);
+}
+
+export async function updateCalendarSyncJob(id, payload) {
+  const { data, error } = await supabase
+    .from('calendar_sync_jobs')
+    .update({
+      status: payload.status,
+      message: payload.message || null,
+      started_at: payload.started_at || null,
+      finished_at: payload.finished_at || null,
+    })
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return normalizeJob(data);
+}
+
+export async function getCalendarSyncJobs(limit = 20) {
+  const { data, error } = await supabase
+    .from('calendar_sync_jobs')
+    .select('*')
+    .eq('household_id', getHouseholdId())
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []).map(normalizeJob);
+}
+
+/* -------------------- WEBHOOK EVENTS -------------------- */
+
+export async function logCalendarWebhookEvent(payload) {
+  const { data, error } = await supabase
+    .from('calendar_webhook_events')
+    .insert({
+      connection_id: payload.connection_id || null,
+      channel_id: payload.channel_id || null,
+      resource_id: payload.resource_id || null,
+      resource_state: payload.resource_state || null,
+      message_number: payload.message_number || null,
+      payload: payload.payload || {},
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/* -------------------- HELPERS FOR UI -------------------- */
+
+export async function getCalendarPageData(options = {}) {
+  const [events, connection, jobs] = await Promise.all([
+    getCalendarEvents(options),
+    getPrimaryGoogleConnection(),
+    getCalendarSyncJobs(10),
+  ]);
+
+  return {
+    events,
+    connection,
+    jobs,
+  };
+}
+
+export function toAllDayEventPayload({
+  title,
+  description = '',
+  location = '',
+  startDate,
+  endDate,
+  timezone = DEFAULT_TIMEZONE,
+  recurrence = '',
+  source = 'familyhub',
+}) {
+  return {
+    title,
+    description,
+    location,
+    start_at: `${startDate}T00:00:00`,
+    end_at: `${endDate}T23:59:59`,
+    all_day: true,
+    timezone,
+    recurrence,
+    status: 'confirmed',
+    source,
+  };
+}
+
+export function toTimedEventPayload({
+  title,
+  description = '',
+  location = '',
+  startAt,
+  endAt,
+  timezone = DEFAULT_TIMEZONE,
+  recurrence = '',
+  source = 'familyhub',
+}) {
+  return {
+    title,
+    description,
+    location,
+    start_at: startAt,
+    end_at: endAt,
+    all_day: false,
+    timezone,
+    recurrence,
+    status: 'confirmed',
+    source,
+  };
+}
