@@ -1,556 +1,828 @@
-import { supabase } from '@/lib/supabaseClient.js';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Helmet } from 'react-helmet';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  CalendarDays,
+  Clock3,
+  MapPin,
+  Plus,
+  Pencil,
+  Trash2,
+  RefreshCw,
+  Link as LinkIcon,
+  Unlink,
+  Loader2,
+} from 'lucide-react';
+import {
+  getCalendarPageData,
+  addCalendarEvent,
+  updateCalendarEvent,
+  deleteCalendarEvent,
+  toAllDayEventPayload,
+  toTimedEventPayload,
+} from '@/lib/calendar.js';
 
-const DEV_HOUSEHOLD_ID = 'd2b8464e-a258-46a0-89de-a1b921062943';
-const DEFAULT_TIMEZONE = 'America/Chicago';
+const DEFAULT_FORM = {
+  title: '',
+  description: '',
+  location: '',
+  startDate: '',
+  endDate: '',
+  startTime: '',
+  endTime: '',
+  allDay: false,
+  timezone: 'America/Chicago',
+  recurrence: '',
+};
 
-function getHouseholdId() {
-  return DEV_HOUSEHOLD_ID;
-}
+function CalendarPage() {
+  const [events, setEvents] = useState([]);
+  const [connection, setConnection] = useState(null);
+  const [jobs, setJobs] = useState([]);
 
-function normalizeEvent(row) {
-  if (!row) return row;
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [errorText, setErrorText] = useState('');
+  const [successText, setSuccessText] = useState('');
 
-  return {
-    id: row.id,
-    household_id: row.household_id,
-    title: row.title || '',
-    description: row.description || '',
-    location: row.location || '',
-    start_at: row.start_at,
-    end_at: row.end_at,
-    all_day: !!row.all_day,
-    timezone: row.timezone || DEFAULT_TIMEZONE,
-    recurrence: row.recurrence || '',
-    status: row.status || 'confirmed',
-    source: row.source || 'familyhub',
-    google_html_link: row.google_html_link || '',
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  };
-}
+  const [eventDialogOpen, setEventDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-function normalizeConnection(row) {
-  if (!row) return null;
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [eventToDelete, setEventToDelete] = useState(null);
 
-  return {
-    id: row.id,
-    household_id: row.household_id,
-    provider: row.provider || 'google',
-    provider_account_email: row.provider_account_email || '',
-    provider_calendar_id: row.provider_calendar_id || 'primary',
-    access_token: row.access_token || '',
-    refresh_token: row.refresh_token || '',
-    token_expires_at: row.token_expires_at || null,
-    sync_token: row.sync_token || '',
-    watch_channel_id: row.watch_channel_id || '',
-    watch_resource_id: row.watch_resource_id || '',
-    watch_expiration: row.watch_expiration || null,
-    is_enabled: !!row.is_enabled,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  };
-}
+  const [form, setForm] = useState(DEFAULT_FORM);
 
-function normalizeSync(row) {
-  if (!row) return null;
+  useEffect(() => {
+    loadCalendarData();
+  }, []);
 
-  return {
-    id: row.id,
-    family_event_id: row.family_event_id,
-    connection_id: row.connection_id,
-    provider: row.provider || 'google',
-    provider_calendar_id: row.provider_calendar_id || 'primary',
-    provider_event_id: row.provider_event_id || '',
-    provider_etag: row.provider_etag || '',
-    provider_updated_at: row.provider_updated_at || null,
-    sync_state: row.sync_state || 'synced',
-    last_synced_at: row.last_synced_at || null,
-  };
-}
+  async function loadCalendarData() {
+    setLoading(true);
+    setErrorText('');
 
-function normalizeJob(row) {
-  if (!row) return null;
+    try {
+      const now = new Date();
+      const startAt = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const endAt = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59).toISOString();
 
-  return {
-    id: row.id,
-    household_id: row.household_id,
-    connection_id: row.connection_id || null,
-    direction: row.direction,
-    status: row.status,
-    message: row.message || '',
-    started_at: row.started_at || null,
-    finished_at: row.finished_at || null,
-    created_at: row.created_at || null,
-  };
-}
+      const data = await getCalendarPageData({
+        startAt,
+        endAt,
+      });
 
-function normalizeEventPayload(payload) {
-  return {
-    household_id: getHouseholdId(),
-    title: String(payload.title || '').trim(),
-    description: payload.description ? String(payload.description).trim() : null,
-    location: payload.location ? String(payload.location).trim() : null,
-    start_at: payload.start_at,
-    end_at: payload.end_at,
-    all_day: !!payload.all_day,
-    timezone: payload.timezone || DEFAULT_TIMEZONE,
-    recurrence: payload.recurrence ? String(payload.recurrence).trim() : null,
-    status: payload.status || 'confirmed',
-    source: payload.source || 'familyhub',
-    google_html_link: payload.google_html_link
-      ? String(payload.google_html_link).trim()
-      : null,
-  };
-}
-
-/* -------------------- EVENTS -------------------- */
-
-export async function getCalendarEvents(options = {}) {
-  const householdId = getHouseholdId();
-  const {
-    startAt,
-    endAt,
-    includeCancelled = false,
-    orderAscending = true,
-  } = options;
-
-  let query = supabase
-    .from('family_events')
-    .select('*')
-    .eq('household_id', householdId);
-
-  if (!includeCancelled) {
-    query = query.neq('status', 'cancelled');
+      setEvents(data.events || []);
+      setConnection(data.connection || null);
+      setJobs(data.jobs || []);
+    } catch (error) {
+      console.error('Failed to load calendar data:', error);
+      setErrorText(error?.message || 'Failed to load calendar data.');
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (startAt) {
-    query = query.gte('start_at', startAt);
+  const upcomingEvents = useMemo(() => {
+    const now = new Date();
+    return [...events]
+      .filter((event) => new Date(event.end_at) >= now)
+      .sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+  }, [events]);
+
+  const pastEvents = useMemo(() => {
+    const now = new Date();
+    return [...events]
+      .filter((event) => new Date(event.end_at) < now)
+      .sort((a, b) => new Date(b.start_at) - new Date(a.start_at))
+      .slice(0, 10);
+  }, [events]);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    const weekEnd = new Date(todayEnd);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    return {
+      total: events.length,
+      today: events.filter((event) => {
+        const start = new Date(event.start_at);
+        return start >= todayStart && start <= todayEnd;
+      }).length,
+      thisWeek: events.filter((event) => {
+        const start = new Date(event.start_at);
+        return start >= todayStart && start <= weekEnd;
+      }).length,
+      connected: connection?.is_enabled ? 'Connected' : 'Not connected',
+    };
+  }, [events, connection]);
+
+  function resetForm() {
+    setForm(DEFAULT_FORM);
+    setEditingEvent(null);
   }
 
-  if (endAt) {
-    query = query.lte('start_at', endAt);
+  function openAddDialog() {
+    resetForm();
+
+    const now = new Date();
+    const startDate = formatDateForInput(now);
+    const endDate = formatDateForInput(now);
+
+    setForm((prev) => ({
+      ...prev,
+      startDate,
+      endDate,
+      startTime: '09:00',
+      endTime: '10:00',
+    }));
+
+    setEventDialogOpen(true);
   }
 
-  query = query.order('start_at', { ascending: orderAscending });
+  function openEditDialog(event) {
+    setEditingEvent(event);
 
-  const { data, error } = await query;
-  if (error) throw error;
+    const start = new Date(event.start_at);
+    const end = new Date(event.end_at);
 
-  return (data || []).map(normalizeEvent);
-}
+    setForm({
+      title: event.title || '',
+      description: event.description || '',
+      location: event.location || '',
+      startDate: formatDateForInput(start),
+      endDate: formatDateForInput(end),
+      startTime: event.all_day ? '' : formatTimeForInput(start),
+      endTime: event.all_day ? '' : formatTimeForInput(end),
+      allDay: !!event.all_day,
+      timezone: event.timezone || 'America/Chicago',
+      recurrence: event.recurrence || '',
+    });
 
-export async function getCalendarEventById(id) {
-  const householdId = getHouseholdId();
-
-  const { data, error } = await supabase
-    .from('family_events')
-    .select('*')
-    .eq('household_id', householdId)
-    .eq('id', id)
-    .single();
-
-  if (error) throw error;
-  return normalizeEvent(data);
-}
-
-export async function addCalendarEvent(payload) {
-  const normalized = normalizeEventPayload(payload);
-
-  const { data, error } = await supabase
-    .from('family_events')
-    .insert(normalized)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeEvent(data);
-}
-
-export async function updateCalendarEvent(id, payload) {
-  const updates = {
-    ...normalizeEventPayload(payload),
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data, error } = await supabase
-    .from('family_events')
-    .update(updates)
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeEvent(data);
-}
-
-export async function deleteCalendarEvent(id) {
-  const { error } = await supabase.from('family_events').delete().eq('id', id);
-  if (error) throw error;
-}
-
-export async function setCalendarEventStatus(id, status) {
-  const { data, error } = await supabase
-    .from('family_events')
-    .update({
-      status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeEvent(data);
-}
-
-/* -------------------- CONNECTIONS -------------------- */
-
-export async function getCalendarConnections() {
-  const householdId = getHouseholdId();
-
-  const { data, error } = await supabase
-    .from('calendar_connections')
-    .select('*')
-    .eq('household_id', householdId)
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-  return (data || []).map(normalizeConnection);
-}
-
-export async function getPrimaryGoogleConnection() {
-  const householdId = getHouseholdId();
-
-  const { data, error } = await supabase
-    .from('calendar_connections')
-    .select('*')
-    .eq('household_id', householdId)
-    .eq('provider', 'google')
-    .eq('is_enabled', true)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw error;
-  return normalizeConnection(data);
-}
-
-export async function upsertCalendarConnection(payload) {
-  const householdId = getHouseholdId();
-
-  const row = {
-    household_id: householdId,
-    provider: payload.provider || 'google',
-    provider_account_email: payload.provider_account_email || null,
-    provider_calendar_id: payload.provider_calendar_id || 'primary',
-    access_token: payload.access_token || null,
-    refresh_token: payload.refresh_token || null,
-    token_expires_at: payload.token_expires_at || null,
-    sync_token: payload.sync_token || null,
-    watch_channel_id: payload.watch_channel_id || null,
-    watch_resource_id: payload.watch_resource_id || null,
-    watch_expiration: payload.watch_expiration || null,
-    is_enabled:
-      typeof payload.is_enabled === 'boolean' ? payload.is_enabled : true,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (payload.id) {
-    const { data, error } = await supabase
-      .from('calendar_connections')
-      .update(row)
-      .eq('id', payload.id)
-      .select('*')
-      .single();
-
-    if (error) throw error;
-    return normalizeConnection(data);
+    setEventDialogOpen(true);
   }
 
-  const { data, error } = await supabase
-    .from('calendar_connections')
-    .insert(row)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeConnection(data);
-}
-
-export async function updateCalendarConnectionTokens(id, payload) {
-  const { data, error } = await supabase
-    .from('calendar_connections')
-    .update({
-      access_token: payload.access_token || null,
-      refresh_token: payload.refresh_token || null,
-      token_expires_at: payload.token_expires_at || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeConnection(data);
-}
-
-export async function updateCalendarConnectionSyncState(id, payload) {
-  const { data, error } = await supabase
-    .from('calendar_connections')
-    .update({
-      sync_token: payload.sync_token || null,
-      watch_channel_id: payload.watch_channel_id || null,
-      watch_resource_id: payload.watch_resource_id || null,
-      watch_expiration: payload.watch_expiration || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeConnection(data);
-}
-
-export async function setCalendarConnectionEnabled(id, isEnabled) {
-  const { data, error } = await supabase
-    .from('calendar_connections')
-    .update({
-      is_enabled: !!isEnabled,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeConnection(data);
-}
-
-export async function deleteCalendarConnection(id) {
-  const { error } = await supabase
-    .from('calendar_connections')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
-}
-
-/* -------------------- EVENT SYNC MAP -------------------- */
-
-export async function getEventSyncByFamilyEventId(familyEventId) {
-  const { data, error } = await supabase
-    .from('family_event_sync')
-    .select('*')
-    .eq('family_event_id', familyEventId)
-    .order('last_synced_at', { ascending: false });
-
-  if (error) throw error;
-  return (data || []).map(normalizeSync);
-}
-
-export async function getEventSyncByProviderEventId(
-  connectionId,
-  providerCalendarId,
-  providerEventId
-) {
-  const { data, error } = await supabase
-    .from('family_event_sync')
-    .select('*')
-    .eq('connection_id', connectionId)
-    .eq('provider_calendar_id', providerCalendarId)
-    .eq('provider_event_id', providerEventId)
-    .maybeSingle();
-
-  if (error) throw error;
-  return normalizeSync(data);
-}
-
-export async function upsertEventSync(payload) {
-  const row = {
-    family_event_id: payload.family_event_id,
-    connection_id: payload.connection_id,
-    provider: payload.provider || 'google',
-    provider_calendar_id: payload.provider_calendar_id || 'primary',
-    provider_event_id: payload.provider_event_id,
-    provider_etag: payload.provider_etag || null,
-    provider_updated_at: payload.provider_updated_at || null,
-    sync_state: payload.sync_state || 'synced',
-    last_synced_at: new Date().toISOString(),
-  };
-
-  if (payload.id) {
-    const { data, error } = await supabase
-      .from('family_event_sync')
-      .update(row)
-      .eq('id', payload.id)
-      .select('*')
-      .single();
-
-    if (error) throw error;
-    return normalizeSync(data);
+  function openDeleteDialog(event) {
+    setEventToDelete(event);
+    setDeleteDialogOpen(true);
   }
 
-  const { data, error } = await supabase
-    .from('family_event_sync')
-    .upsert(row, {
-      onConflict: 'family_event_id,connection_id',
-    })
-    .select('*')
-    .single();
+  function handleFormChange(field, value) {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  }
 
-  if (error) throw error;
-  return normalizeSync(data);
+  async function handleSaveEvent(e) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    if (!form.startDate || !form.endDate) return;
+    if (!form.allDay && (!form.startTime || !form.endTime)) return;
+
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
+    try {
+      let payload;
+
+      if (form.allDay) {
+        payload = toAllDayEventPayload({
+          title: form.title.trim(),
+          description: form.description.trim(),
+          location: form.location.trim(),
+          startDate: form.startDate,
+          endDate: form.endDate,
+          timezone: form.timezone,
+          recurrence: form.recurrence.trim(),
+        });
+      } else {
+        payload = toTimedEventPayload({
+          title: form.title.trim(),
+          description: form.description.trim(),
+          location: form.location.trim(),
+          startAt: `${form.startDate}T${form.startTime}:00`,
+          endAt: `${form.endDate}T${form.endTime}:00`,
+          timezone: form.timezone,
+          recurrence: form.recurrence.trim(),
+        });
+      }
+
+      if (editingEvent?.id) {
+        await updateCalendarEvent(editingEvent.id, payload);
+        setSuccessText('Event updated.');
+      } else {
+        await addCalendarEvent(payload);
+        setSuccessText('Event added.');
+      }
+
+      setEventDialogOpen(false);
+      resetForm();
+      await loadCalendarData();
+    } catch (error) {
+      console.error('Failed to save event:', error);
+      setErrorText(error?.message || 'Failed to save event.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteConfirmed() {
+    if (!eventToDelete) return;
+
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+
+    try {
+      await deleteCalendarEvent(eventToDelete.id);
+      setDeleteDialogOpen(false);
+      setEventToDelete(null);
+      setSuccessText('Event deleted.');
+      await loadCalendarData();
+    } catch (error) {
+      console.error('Failed to delete event:', error);
+      setErrorText(error?.message || 'Failed to delete event.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleGoogleConnect() {
+    setSuccessText('');
+    setErrorText(
+      'Google Calendar auth is the next step. We still need to build the OAuth + sync function endpoints.'
+    );
+  }
+
+  function handleGoogleSync() {
+    setSuccessText('');
+    setErrorText(
+      'Manual Google sync is not wired yet. Next we’ll build the backend sync function and callback flow.'
+    );
+  }
+
+  return (
+    <>
+      <Helmet>
+        <title>Calendar - FamilyHub</title>
+        <meta
+          name="description"
+          content="Family events and two-way Google Calendar sync"
+        />
+      </Helmet>
+
+      <div className="space-y-6">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
+            <p className="text-muted-foreground">
+              Manage FamilyHub events and prepare for two-way Google Calendar sync.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="gap-2 rounded-xl" onClick={handleGoogleConnect}>
+              {connection?.is_enabled ? <Unlink className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
+              {connection?.is_enabled ? 'Google linked' : 'Connect Google'}
+            </Button>
+
+            <Button variant="outline" className="gap-2 rounded-xl" onClick={handleGoogleSync}>
+              <RefreshCw className="h-4 w-4" />
+              Sync
+            </Button>
+
+            <Button className="gap-2 rounded-xl shadow-sm" onClick={openAddDialog}>
+              <Plus className="h-4 w-4" />
+              Add event
+            </Button>
+          </div>
+        </div>
+
+        {(errorText || successText) && (
+          <div className="space-y-2">
+            {errorText ? (
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {errorText}
+              </div>
+            ) : null}
+            {successText ? (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+                {successText}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard label="Total Events" value={stats.total} />
+          <StatCard label="Today" value={stats.today} />
+          <StatCard label="This Week" value={stats.thisWeek} />
+          <StatCard
+            label="Google Status"
+            value={stats.connected}
+            valueClassName={connection?.is_enabled ? 'text-emerald-600' : 'text-slate-900'}
+          />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 text-primary" />
+                Upcoming events
+              </CardTitle>
+
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={loadCalendarData}>
+                Refresh
+              </Button>
+            </CardHeader>
+
+            <CardContent>
+              {loading ? (
+                <LoadingBlock text="Loading events..." />
+              ) : upcomingEvents.length ? (
+                <div className="space-y-3">
+                  {upcomingEvents.map((event) => (
+                    <EventRow
+                      key={event.id}
+                      event={event}
+                      onEdit={() => openEditDialog(event)}
+                      onDelete={() => openDeleteDialog(event)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No upcoming events"
+                  description="Create your first event to get started."
+                  actionLabel="Add event"
+                  onAction={openAddDialog}
+                />
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-6">
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader>
+                <CardTitle>Google connection</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <Badge variant={connection?.is_enabled ? 'secondary' : 'outline'}>
+                    {connection?.is_enabled ? 'Connected' : 'Not connected'}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Account</span>
+                  <span className="text-sm font-medium">
+                    {connection?.provider_account_email || '—'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-muted-foreground">Calendar</span>
+                  <span className="text-sm font-medium">
+                    {connection?.provider_calendar_id || 'primary'}
+                  </span>
+                </div>
+
+                <p className="pt-2 text-xs text-muted-foreground">
+                  OAuth and true two-way Google sync are the next backend step.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader>
+                <CardTitle>Recent sync jobs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {jobs.length ? (
+                  <div className="space-y-3">
+                    {jobs.map((job) => (
+                      <div
+                        key={job.id}
+                        className="rounded-xl border bg-muted/30 p-3"
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium">{job.direction}</p>
+                          <Badge variant="outline" className="text-xs">
+                            {job.status}
+                          </Badge>
+                        </div>
+                        {job.message ? (
+                          <p className="mb-1 text-xs text-muted-foreground">{job.message}</p>
+                        ) : null}
+                        <p className="text-xs text-muted-foreground">
+                          {job.created_at
+                            ? new Date(job.created_at).toLocaleString()
+                            : 'Unknown time'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No sync jobs yet.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="rounded-2xl shadow-sm">
+              <CardHeader>
+                <CardTitle>Recent past events</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {pastEvents.length ? (
+                  <div className="space-y-3">
+                    {pastEvents.map((event) => (
+                      <div
+                        key={event.id}
+                        className="rounded-xl border bg-muted/30 p-3"
+                      >
+                        <p className="text-sm font-medium">{event.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatEventDateRange(event)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No past events yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      <Dialog
+        open={eventDialogOpen}
+        onOpenChange={(open) => {
+          setEventDialogOpen(open);
+          if (!open) resetForm();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingEvent ? 'Edit event' : 'Add event'}</DialogTitle>
+            <DialogDescription>
+              Create or update a FamilyHub calendar event.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveEvent} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Title" required>
+                <InputLike
+                  value={form.title}
+                  onChange={(e) => handleFormChange('title', e.target.value)}
+                  placeholder="Event title"
+                />
+              </Field>
+
+              <Field label="Timezone">
+                <select
+                  value={form.timezone}
+                  onChange={(e) => handleFormChange('timezone', e.target.value)}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="America/New_York">Eastern Time</option>
+                  <option value="America/Chicago">Central Time</option>
+                  <option value="America/Denver">Mountain Time</option>
+                  <option value="America/Los_Angeles">Pacific Time</option>
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Description">
+              <textarea
+                value={form.description}
+                onChange={(e) => handleFormChange('description', e.target.value)}
+                placeholder="Add details about this event"
+                className="min-h-[110px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+              />
+            </Field>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Location">
+                <InputLike
+                  value={form.location}
+                  onChange={(e) => handleFormChange('location', e.target.value)}
+                  placeholder="Location"
+                />
+              </Field>
+
+              <Field label="Recurrence">
+                <InputLike
+                  value={form.recurrence}
+                  onChange={(e) => handleFormChange('recurrence', e.target.value)}
+                  placeholder="Optional RRULE later"
+                />
+              </Field>
+            </div>
+
+            <div className="flex items-center justify-between rounded-xl border p-3">
+              <div>
+                <p className="text-sm font-medium">All-day event</p>
+                <p className="text-xs text-muted-foreground">
+                  Use dates only instead of times.
+                </p>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={form.allDay}
+                onChange={(e) => handleFormChange('allDay', e.target.checked)}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Start date" required>
+                <input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => handleFormChange('startDate', e.target.value)}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                />
+              </Field>
+
+              <Field label="End date" required>
+                <input
+                  type="date"
+                  value={form.endDate}
+                  onChange={(e) => handleFormChange('endDate', e.target.value)}
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                />
+              </Field>
+            </div>
+
+            {!form.allDay ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Start time" required>
+                  <input
+                    type="time"
+                    value={form.startTime}
+                    onChange={(e) => handleFormChange('startTime', e.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  />
+                </Field>
+
+                <Field label="End time" required>
+                  <input
+                    type="time"
+                    value={form.endTime}
+                    onChange={(e) => handleFormChange('endTime', e.target.value)}
+                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  />
+                </Field>
+              </div>
+            ) : null}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setEventDialogOpen(false);
+                  resetForm();
+                }}
+              >
+                Cancel
+              </Button>
+
+              <Button type="submit" disabled={saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : editingEvent ? (
+                  'Save changes'
+                ) : (
+                  'Add event'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Are you sure?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete this event from FamilyHub.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-2xl border bg-muted/40 p-3 text-sm">
+            {eventToDelete?.title || 'Selected event'}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setDeleteDialogOpen(false);
+                setEventToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+
+            <Button type="button" variant="destructive" onClick={handleDeleteConfirmed} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
-export async function deleteEventSyncByFamilyEventId(familyEventId) {
-  const { error } = await supabase
-    .from('family_event_sync')
-    .delete()
-    .eq('family_event_id', familyEventId);
+function EventRow({ event, onEdit, onDelete }) {
+  return (
+    <div className="rounded-2xl border p-4 shadow-sm transition-all duration-200 hover:shadow-md">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold">{event.title}</h3>
+            <Badge variant="secondary" className="text-xs">
+              {event.all_day ? 'All day' : 'Timed'}
+            </Badge>
+            {event.source ? (
+              <Badge variant="outline" className="text-xs">
+                {event.source}
+              </Badge>
+            ) : null}
+          </div>
 
-  if (error) throw error;
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Clock3 className="h-3.5 w-3.5" />
+              <span>{formatEventDateRange(event)}</span>
+            </div>
+
+            {event.location ? (
+              <div className="flex items-center gap-2">
+                <MapPin className="h-3.5 w-3.5" />
+                <span>{event.location}</span>
+              </div>
+            ) : null}
+
+            {event.description ? (
+              <p className="pt-1 text-sm text-muted-foreground">{event.description}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="rounded-xl" onClick={onEdit}>
+            <Pencil className="mr-1 h-3.5 w-3.5" />
+            Edit
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl text-destructive hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="mr-1 h-3.5 w-3.5" />
+            Delete
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export async function deleteEventSyncById(id) {
-  const { error } = await supabase
-    .from('family_event_sync')
-    .delete()
-    .eq('id', id);
-
-  if (error) throw error;
+function StatCard({ label, value, valueClassName = 'text-slate-900' }) {
+  return (
+    <Card className="rounded-2xl shadow-sm">
+      <CardContent className="p-4">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className={`text-xl font-semibold ${valueClassName}`}>{value}</p>
+      </CardContent>
+    </Card>
+  );
 }
 
-/* -------------------- SYNC JOBS -------------------- */
-
-export async function createCalendarSyncJob(payload) {
-  const { data, error } = await supabase
-    .from('calendar_sync_jobs')
-    .insert({
-      household_id: getHouseholdId(),
-      connection_id: payload.connection_id || null,
-      direction: payload.direction,
-      status: payload.status || 'pending',
-      message: payload.message || null,
-      started_at: payload.started_at || null,
-      finished_at: payload.finished_at || null,
-    })
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeJob(data);
+function Field({ label, required = false, children }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">
+        {label} {required ? <span className="text-destructive">*</span> : null}
+      </label>
+      {children}
+    </div>
+  );
 }
 
-export async function updateCalendarSyncJob(id, payload) {
-  const { data, error } = await supabase
-    .from('calendar_sync_jobs')
-    .update({
-      status: payload.status,
-      message: payload.message || null,
-      started_at: payload.started_at || null,
-      finished_at: payload.finished_at || null,
-    })
-    .eq('id', id)
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return normalizeJob(data);
+function InputLike({ value, onChange, placeholder }) {
+  return (
+    <input
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+    />
+  );
 }
 
-export async function getCalendarSyncJobs(limit = 20) {
-  const { data, error } = await supabase
-    .from('calendar_sync_jobs')
-    .select('*')
-    .eq('household_id', getHouseholdId())
-    .order('created_at', { ascending: false })
-    .limit(limit);
-
-  if (error) throw error;
-  return (data || []).map(normalizeJob);
+function LoadingBlock({ text }) {
+  return <div className="text-sm text-muted-foreground">{text}</div>;
 }
 
-/* -------------------- WEBHOOK EVENTS -------------------- */
-
-export async function logCalendarWebhookEvent(payload) {
-  const { data, error } = await supabase
-    .from('calendar_webhook_events')
-    .insert({
-      connection_id: payload.connection_id || null,
-      channel_id: payload.channel_id || null,
-      resource_id: payload.resource_id || null,
-      resource_state: payload.resource_state || null,
-      message_number: payload.message_number || null,
-      payload: payload.payload || {},
-    })
-    .select('*')
-    .single();
-
-  if (error) throw error;
-  return data;
+function EmptyState({ title, description, actionLabel, onAction }) {
+  return (
+    <Card className="rounded-2xl border-dashed shadow-sm">
+      <CardContent className="flex flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+          <CalendarDays className="h-6 w-6 text-muted-foreground" />
+        </div>
+        <h3 className="mb-2 text-lg font-semibold">{title}</h3>
+        <p className="mb-4 max-w-md text-sm text-muted-foreground">{description}</p>
+        {actionLabel && onAction ? (
+          <Button className="rounded-xl" onClick={onAction}>
+            {actionLabel}
+          </Button>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
 }
 
-/* -------------------- HELPERS FOR UI -------------------- */
-
-export async function getCalendarPageData(options = {}) {
-  const [events, connection, jobs] = await Promise.all([
-    getCalendarEvents(options),
-    getPrimaryGoogleConnection(),
-    getCalendarSyncJobs(10),
-  ]);
-
-  return {
-    events,
-    connection,
-    jobs,
-  };
+function formatDateForInput(date) {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-export function toAllDayEventPayload({
-  title,
-  description = '',
-  location = '',
-  startDate,
-  endDate,
-  timezone = DEFAULT_TIMEZONE,
-  recurrence = '',
-  source = 'familyhub',
-}) {
-  return {
-    title,
-    description,
-    location,
-    start_at: `${startDate}T00:00:00`,
-    end_at: `${endDate}T23:59:59`,
-    all_day: true,
-    timezone,
-    recurrence,
-    status: 'confirmed',
-    source,
-  };
+function formatTimeForInput(date) {
+  const d = new Date(date);
+  const hours = `${d.getHours()}`.padStart(2, '0');
+  const minutes = `${d.getMinutes()}`.padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
-export function toTimedEventPayload({
-  title,
-  description = '',
-  location = '',
-  startAt,
-  endAt,
-  timezone = DEFAULT_TIMEZONE,
-  recurrence = '',
-  source = 'familyhub',
-}) {
-  return {
-    title,
-    description,
-    location,
-    start_at: startAt,
-    end_at: endAt,
-    all_day: false,
-    timezone,
-    recurrence,
-    status: 'confirmed',
-    source,
-  };
+function formatEventDateRange(event) {
+  const start = new Date(event.start_at);
+  const end = new Date(event.end_at);
+
+  if (event.all_day) {
+    return `${start.toLocaleDateString()}${sameDay(start, end) ? '' : ` - ${end.toLocaleDateString()}`}`;
+  }
+
+  const same = sameDay(start, end);
+
+  if (same) {
+    return `${start.toLocaleDateString()} • ${start.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    })} - ${end.toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    })}`;
+  }
+
+  return `${start.toLocaleString()} - ${end.toLocaleString()}`;
 }
+
+function sameDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+export default CalendarPage;
