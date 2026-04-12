@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -12,7 +12,6 @@ import {
   Settings,
   Menu,
   X,
-  Heart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -29,54 +28,70 @@ const navigationItems = [
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
+const LOGO_URL = "https://ttjdhzwowqaecnhycyfb.supabase.co/storage/v1/object/public/website%20photos/garzalogo.png";
+
 function Sidebar() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Close sidebar automatically when navigating on mobile
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname]);
 
   const toggleSidebar = () => setIsOpen((prev) => !prev);
 
   return (
     <>
+      {/* Mobile Trigger - Positioned to look like a native app menu */}
       <Button
         variant="ghost"
         size="icon"
-        className="fixed left-4 top-4 z-50 lg:hidden"
+        className="fixed left-4 top-3 z-50 h-10 w-10 rounded-xl bg-background/80 backdrop-blur-sm shadow-sm border lg:hidden"
         onClick={toggleSidebar}
       >
-        {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </Button>
 
+      {/* Mobile Overlay */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity lg:hidden"
           onClick={toggleSidebar}
         />
       )}
 
+      {/* Sidebar Container */}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border bg-card transition-transform duration-300',
+          'fixed left-0 top-0 z-40 flex h-screen w-72 flex-col border-r border-border bg-card transition-transform duration-300 ease-in-out lg:w-64',
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         )}
       >
-        <div className="border-b border-border px-5 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary">
-              <Heart className="h-5 w-5 text-primary-foreground" />
+        {/* Header/Branding */}
+        <div className="px-6 py-8">
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-muted p-2 transition-transform group-hover:scale-105">
+              <img 
+                src={LOGO_URL} 
+                alt="Garza Logo" 
+                className="h-full w-full object-contain"
+              />
             </div>
 
             <div className="min-w-0">
-              <h1 className="truncate text-lg font-bold text-foreground">
-                FamilyHub
+              <h1 className="truncate text-xl font-black tracking-tight text-foreground">
+                GarzaHub
               </h1>
-              <p className="text-xs text-muted-foreground">
-                Your family operating system
+              <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">
+                Family OS
               </p>
             </div>
-          </div>
+          </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-5">
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto px-4 py-2 custom-scrollbar">
           <ul className="space-y-1.5">
             {navigationItems.map((item) => {
               const Icon = item.icon;
@@ -86,18 +101,15 @@ function Sidebar() {
                 <li key={item.path}>
                   <Link
                     to={item.path}
-                    onClick={() => setIsOpen(false)}
                     className={cn(
-                      'flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition-all duration-200',
+                      'flex items-center gap-3 rounded-2xl px-4 py-3.5 text-sm font-medium transition-all duration-200',
                       isActive
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-foreground hover:bg-muted'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
-                    <span className={cn(isActive && 'font-medium')}>
-                      {item.label}
-                    </span>
+                    <Icon className={cn("h-5 w-5 flex-shrink-0", isActive ? "text-white" : "text-muted-foreground")} />
+                    <span>{item.label}</span>
                   </Link>
                 </li>
               );
@@ -105,10 +117,14 @@ function Sidebar() {
           </ul>
         </nav>
 
-        <div className="border-t border-border px-4 py-4">
-          <p className="text-center text-xs text-muted-foreground">
-            © 2026 FamilyHub
-          </p>
+        {/* Footer */}
+        <div className="border-t border-border p-6 bg-muted/20">
+          <div className="flex flex-col items-center gap-1">
+             <img src={LOGO_URL} className="h-4 w-4 opacity-20 grayscale" alt="" />
+             <p className="text-[10px] font-bold uppercase tracking-tighter text-muted-foreground/50">
+               © 2026 Garza Family Hub
+             </p>
+          </div>
         </div>
       </aside>
     </>
