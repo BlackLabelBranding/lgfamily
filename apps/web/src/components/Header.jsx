@@ -11,8 +11,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+// 1. Import the notification hook
+import { useNotifications } from '@/hooks/useNotifications';
 
 function Header() {
+  // 2. Use the hook to get real data
+  const { notifications, unreadCount } = useNotifications();
+
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="flex items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
@@ -36,12 +41,15 @@ function Header() {
                 className="relative h-10 w-10 rounded-xl"
               >
                 <Bell className="h-5 w-5" />
-                <Badge
-                  variant="destructive"
-                  className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full p-0 text-[10px]"
-                >
-                  3
-                </Badge>
+                {/* 3. Dynamic Badge Count */}
+                {unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full p-0 text-[10px]"
+                  >
+                    {unreadCount}
+                  </Badge>
+                )}
               </Button>
             </DropdownMenuTrigger>
 
@@ -49,49 +57,42 @@ function Header() {
               <DropdownMenuLabel>Notifications</DropdownMenuLabel>
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                <p className="text-sm font-medium">Emma&apos;s soccer practice today</p>
-                <p className="text-xs text-muted-foreground">
-                  4:30 PM - Don&apos;t forget water bottle
-                </p>
-              </DropdownMenuItem>
-
-              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                <p className="text-sm font-medium">Milk expires tomorrow</p>
-                <p className="text-xs text-muted-foreground">
-                  Add to shopping list
-                </p>
-              </DropdownMenuItem>
-
-              <DropdownMenuItem className="flex flex-col items-start gap-1 py-3">
-                <p className="text-sm font-medium">
-                  Lucas&apos;s passport expires in 2 months
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Consider renewal
-                </p>
-              </DropdownMenuItem>
+              {/* 4. Map through real notifications */}
+              {notifications.length > 0 ? (
+                notifications.map((n) => (
+                  <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 py-3 cursor-pointer">
+                    <p className={`text-sm font-medium ${!n.read ? 'text-primary' : ''}`}>
+                      {n.title}
+                    </p>
+                    {n.message && (
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {n.message}
+                      </p>
+                    )}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <div className="py-6 text-center text-xs text-muted-foreground">
+                  No new notifications
+                </div>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 rounded-xl"
-              >
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl">
                 <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary">
                   <User className="h-4 w-4 text-primary-foreground" />
                 </div>
               </Button>
             </DropdownMenuTrigger>
-
             <DropdownMenuContent align="end" className="rounded-xl">
-              <DropdownMenuLabel>Sarah (Mom)</DropdownMenuLabel>
+              <DropdownMenuLabel>Lance Garza</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Profile</DropdownMenuItem>
-              <DropdownMenuItem>Switch account</DropdownMenuItem>
+              <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Sign out</DropdownMenuItem>
             </DropdownMenuContent>
