@@ -153,7 +153,7 @@ function FamilyProfile() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <Label className="text-[10px] font-black uppercase ml-1">Height</Label>
-                        <Input value={editData.height || ''} onChange={e => setEditData({...editData, height: e.target.value})} placeholder="5'11\"" className="rounded-xl bg-muted/50 border-0" />
+                        <Input value={editData.height || ''} onChange={e => setEditData({...editData, height: e.target.value})} placeholder="5ft 11in" className="rounded-xl bg-muted/50 border-0" />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-[10px] font-black uppercase ml-1">Weight</Label>
