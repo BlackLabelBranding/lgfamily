@@ -22,6 +22,7 @@ import {
   Link as LinkIcon,
   Unlink,
   Loader2,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 import {
   getCalendarPageData,
@@ -31,6 +32,7 @@ import {
   toAllDayEventPayload,
   toTimedEventPayload,
 } from '@/lib/calendar.js';
+import { supabase } from '@/lib/supabaseClient';
 
 const DEFAULT_FORM = {
   title: '',
@@ -49,6 +51,7 @@ function CalendarPage() {
   const [events, setEvents] = useState([]);
   const [connection, setConnection] = useState(null);
   const [jobs, setJobs] = useState([]);
+  const [viewMode, setViewMode] = useState('list'); // 'list', 'day', 'week', 'month'
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,8 +76,9 @@ function CalendarPage() {
 
     try {
       const now = new Date();
+      // Look ahead 3 months for planning
       const startAt = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      const endAt = new Date(now.getFullYear(), now.getMonth() + 2, 0, 23, 59, 59).toISOString();
+      const endAt = new Date(now.getFullYear(), now.getMonth() + 3, 0, 23, 59, 59).toISOString();
 
       const data = await getCalendarPageData({
         startAt,
@@ -89,6 +93,29 @@ function CalendarPage() {
       setErrorText(error?.message || 'Failed to load calendar data.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  // --- FORCE SYNC LOGIC ---
+  async function handleGoogleSync() {
+    setSaving(true);
+    setErrorText('');
+    setSuccessText('');
+    try {
+      // Invoke the Edge Function we built for the hourly sync
+      const { data, error } = await supabase.functions.invoke('hourly-calendar-sync', {
+        body: { mode: 'both' }
+      });
+
+      if (error) throw error;
+      
+      setSuccessText('Manual sync successful! Refreshing calendar...');
+      await loadCalendarData();
+    } catch (error) {
+      console.error('Sync error:', error);
+      setErrorText('Sync failed: ' + (error.message || 'Check function logs'));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -135,28 +162,21 @@ function CalendarPage() {
 
   function openAddDialog() {
     resetForm();
-
     const now = new Date();
-    const startDate = formatDateForInput(now);
-    const endDate = formatDateForInput(now);
-
     setForm((prev) => ({
       ...prev,
-      startDate,
-      endDate,
+      startDate: formatDateForInput(now),
+      endDate: formatDateForInput(now),
       startTime: '09:00',
       endTime: '10:00',
     }));
-
     setEventDialogOpen(true);
   }
 
   function openEditDialog(event) {
     setEditingEvent(event);
-
     const start = new Date(event.start_at);
     const end = new Date(event.end_at);
-
     setForm({
       title: event.title || '',
       description: event.description || '',
@@ -169,7 +189,6 @@ function CalendarPage() {
       timezone: event.timezone || 'America/Chicago',
       recurrence: event.recurrence || '',
     });
-
     setEventDialogOpen(true);
   }
 
@@ -179,61 +198,29 @@ function CalendarPage() {
   }
 
   function handleFormChange(field, value) {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   async function handleSaveEvent(e) {
     e.preventDefault();
-    if (!form.title.trim()) return;
-    if (!form.startDate || !form.endDate) return;
-    if (!form.allDay && (!form.startTime || !form.endTime)) return;
-
+    if (!form.title.trim() || !form.startDate || !form.endDate) return;
     setSaving(true);
-    setErrorText('');
-    setSuccessText('');
-
     try {
-      let payload;
-
-      if (form.allDay) {
-        payload = toAllDayEventPayload({
-          title: form.title.trim(),
-          description: form.description.trim(),
-          location: form.location.trim(),
-          startDate: form.startDate,
-          endDate: form.endDate,
-          timezone: form.timezone,
-          recurrence: form.recurrence.trim(),
-        });
-      } else {
-        payload = toTimedEventPayload({
-          title: form.title.trim(),
-          description: form.description.trim(),
-          location: form.location.trim(),
-          startAt: `${form.startDate}T${form.startTime}:00`,
-          endAt: `${form.endDate}T${form.endTime}:00`,
-          timezone: form.timezone,
-          recurrence: form.recurrence.trim(),
-        });
-      }
+      const payload = form.allDay 
+        ? toAllDayEventPayload(form) 
+        : toTimedEventPayload({ ...form, startAt: `${form.startDate}T${form.startTime}:00`, endAt: `${form.endDate}T${form.endTime}:00` });
 
       if (editingEvent?.id) {
         await updateCalendarEvent(editingEvent.id, payload);
-        setSuccessText('Event updated.');
       } else {
         await addCalendarEvent(payload);
-        setSuccessText('Event added.');
       }
-
       setEventDialogOpen(false);
       resetForm();
       await loadCalendarData();
+      setSuccessText('Calendar updated.');
     } catch (error) {
-      console.error('Failed to save event:', error);
-      setErrorText(error?.message || 'Failed to save event.');
+      setErrorText(error.message);
     } finally {
       setSaving(false);
     }
@@ -241,118 +228,88 @@ function CalendarPage() {
 
   async function handleDeleteConfirmed() {
     if (!eventToDelete) return;
-
     setSaving(true);
-    setErrorText('');
-    setSuccessText('');
-
     try {
       await deleteCalendarEvent(eventToDelete.id);
       setDeleteDialogOpen(false);
-      setEventToDelete(null);
-      setSuccessText('Event deleted.');
       await loadCalendarData();
     } catch (error) {
-      console.error('Failed to delete event:', error);
-      setErrorText(error?.message || 'Failed to delete event.');
+      setErrorText(error.message);
     } finally {
       setSaving(false);
     }
   }
 
-  function handleGoogleConnect() {
-    setSuccessText('');
-    setErrorText(
-      'Google Calendar auth is the next step. We still need to build the OAuth + sync function endpoints.'
-    );
-  }
-
-  function handleGoogleSync() {
-    setSuccessText('');
-    setErrorText(
-      'Manual Google sync is not wired yet. Next we’ll build the backend sync function and callback flow.'
-    );
-  }
-
   return (
     <>
-      <Helmet>
-        <title>Calendar - FamilyHub</title>
-        <meta
-          name="description"
-          content="Family events and two-way Google Calendar sync"
-        />
-      </Helmet>
+      <Helmet><title>Calendar - FamilyHub</title></Helmet>
 
       <div className="space-y-6">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
-            <p className="text-muted-foreground">
-              Manage FamilyHub events and prepare for two-way Google Calendar sync.
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight">Family Calendar</h1>
+            <p className="text-muted-foreground">Unified planning for events, tasks, and birthdays.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="gap-2 rounded-xl" onClick={handleGoogleConnect}>
-              {connection?.is_enabled ? <Unlink className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
-              {connection?.is_enabled ? 'Google linked' : 'Connect Google'}
-            </Button>
-
-            <Button variant="outline" className="gap-2 rounded-xl" onClick={handleGoogleSync}>
-              <RefreshCw className="h-4 w-4" />
-              Sync
+            <div className="flex bg-muted p-1 rounded-xl mr-2">
+               {['list', 'month'].map((m) => (
+                 <Button 
+                   key={m} 
+                   variant={viewMode === m ? 'secondary' : 'ghost'} 
+                   size="sm" 
+                   className="rounded-lg capitalize"
+                   onClick={() => setViewMode(m)}
+                 >
+                   {m}
+                 </Button>
+               ))}
+            </div>
+            
+            <Button variant="outline" className="gap-2 rounded-xl" onClick={handleGoogleSync} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Sync Google
             </Button>
 
             <Button className="gap-2 rounded-xl shadow-sm" onClick={openAddDialog}>
-              <Plus className="h-4 w-4" />
-              Add event
+              <Plus className="h-4 w-4" /> Add Event
             </Button>
           </div>
         </div>
 
-        {(errorText || successText) && (
-          <div className="space-y-2">
-            {errorText ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {errorText}
-              </div>
-            ) : null}
-            {successText ? (
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-                {successText}
-              </div>
-            ) : null}
-          </div>
+        {errorText && (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{errorText}</div>
+        )}
+        {successText && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{successText}</div>
         )}
 
         <div className="grid gap-4 md:grid-cols-4">
-          <StatCard label="Total Events" value={stats.total} />
+          <StatCard label="Total Items" value={stats.total} />
           <StatCard label="Today" value={stats.today} />
           <StatCard label="This Week" value={stats.thisWeek} />
-          <StatCard
-            label="Google Status"
-            value={stats.connected}
-            valueClassName={connection?.is_enabled ? 'text-emerald-600' : 'text-slate-900'}
+          <StatCard 
+            label="Google Status" 
+            value={stats.connected} 
+            valueClassName={connection?.is_enabled ? 'text-emerald-600' : 'text-slate-400'} 
           />
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
           <Card className="rounded-2xl shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <CalendarDays className="h-5 w-5 text-primary" />
-                Upcoming events
+                {viewMode === 'list' ? 'Upcoming Schedule' : 'Calendar Grid'}
               </CardTitle>
-
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={loadCalendarData}>
-                Refresh
-              </Button>
             </CardHeader>
 
             <CardContent>
               {loading ? (
-                <LoadingBlock text="Loading events..." />
+                <div className="flex flex-col items-center py-12 text-muted-foreground">
+                  <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                  <p>Loading your family schedule...</p>
+                </div>
               ) : upcomingEvents.length ? (
                 <div className="space-y-3">
                   {upcomingEvents.map((event) => (
@@ -365,301 +322,113 @@ function CalendarPage() {
                   ))}
                 </div>
               ) : (
-                <EmptyState
-                  title="No upcoming events"
-                  description="Create your first event to get started."
-                  actionLabel="Add event"
-                  onAction={openAddDialog}
-                />
+                <EmptyState title="Clear skies!" description="No upcoming events or tasks found." onAction={openAddDialog} actionLabel="Add Event" />
               )}
             </CardContent>
           </Card>
 
           <div className="space-y-6">
+            <Card className="rounded-2xl shadow-sm border-primary/10 bg-primary/5">
+               <CardHeader><CardTitle className="text-sm">Family Tip</CardTitle></CardHeader>
+               <CardContent className="text-xs text-muted-foreground">
+                 Birthdays from your Family page and Tasks with due dates appear here automatically.
+               </CardContent>
+            </Card>
+
             <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle>Google connection</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Shared Google Calendar</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">Status</span>
-                  <Badge variant={connection?.is_enabled ? 'secondary' : 'outline'}>
-                    {connection?.is_enabled ? 'Connected' : 'Not connected'}
-                  </Badge>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Provider</span>
+                  <Badge variant="outline">Google Calendar</Badge>
                 </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">Account</span>
-                  <span className="text-sm font-medium">
-                    {connection?.provider_account_email || '—'}
-                  </span>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Calendar ID</span>
+                  <span className="font-mono text-[10px] truncate max-w-[120px]">{connection?.provider_calendar_id || 'primary'}</span>
                 </div>
-
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-muted-foreground">Calendar</span>
-                  <span className="text-sm font-medium">
-                    {connection?.provider_calendar_id || 'primary'}
-                  </span>
-                </div>
-
-                <p className="pt-2 text-xs text-muted-foreground">
-                  OAuth and true two-way Google sync are the next backend step.
-                </p>
               </CardContent>
             </Card>
 
             <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle>Recent sync jobs</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {jobs.length ? (
-                  <div className="space-y-3">
-                    {jobs.map((job) => (
-                      <div
-                        key={job.id}
-                        className="rounded-xl border bg-muted/30 p-3"
-                      >
-                        <div className="mb-1 flex items-center justify-between gap-3">
-                          <p className="text-sm font-medium">{job.direction}</p>
-                          <Badge variant="outline" className="text-xs">
-                            {job.status}
-                          </Badge>
-                        </div>
-                        {job.message ? (
-                          <p className="mb-1 text-xs text-muted-foreground">{job.message}</p>
-                        ) : null}
-                        <p className="text-xs text-muted-foreground">
-                          {job.created_at
-                            ? new Date(job.created_at).toLocaleString()
-                            : 'Unknown time'}
-                        </p>
-                      </div>
-                    ))}
+              <CardHeader><CardTitle>Past Events</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {pastEvents.map(e => (
+                  <div key={e.id} className="text-xs border-b pb-2 last:border-0">
+                    <p className="font-medium">{e.title}</p>
+                    <p className="text-muted-foreground">{new Date(e.start_at).toLocaleDateString()}</p>
                   </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No sync jobs yet.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle>Recent past events</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {pastEvents.length ? (
-                  <div className="space-y-3">
-                    {pastEvents.map((event) => (
-                      <div
-                        key={event.id}
-                        className="rounded-xl border bg-muted/30 p-3"
-                      >
-                        <p className="text-sm font-medium">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatEventDateRange(event)}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No past events yet.</p>
-                )}
+                ))}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
 
-      <Dialog
-        open={eventDialogOpen}
-        onOpenChange={(open) => {
-          setEventDialogOpen(open);
-          if (!open) resetForm();
-        }}
-      >
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      {/* Event Dialog */}
+      <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl rounded-2xl">
           <DialogHeader>
-            <DialogTitle>{editingEvent ? 'Edit event' : 'Add event'}</DialogTitle>
-            <DialogDescription>
-              Create or update a FamilyHub calendar event.
-            </DialogDescription>
+            <DialogTitle>{editingEvent ? 'Edit Event' : 'New Event'}</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSaveEvent} className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Title" required>
-                <InputLike
-                  value={form.title}
-                  onChange={(e) => handleFormChange('title', e.target.value)}
-                  placeholder="Event title"
-                />
-              </Field>
-
-              <Field label="Timezone">
-                <select
-                  value={form.timezone}
-                  onChange={(e) => handleFormChange('timezone', e.target.value)}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="America/New_York">Eastern Time</option>
-                  <option value="America/Chicago">Central Time</option>
-                  <option value="America/Denver">Mountain Time</option>
-                  <option value="America/Los_Angeles">Pacific Time</option>
-                </select>
-              </Field>
-            </div>
+          <form onSubmit={handleSaveEvent} className="space-y-4 pt-4">
+            <Field label="Title" required>
+              <InputLike value={form.title} onChange={(e) => handleFormChange('title', e.target.value)} placeholder="e.g., Family Dinner" />
+            </Field>
 
             <Field label="Description">
-              <textarea
-                value={form.description}
+              <textarea 
+                value={form.description} 
                 onChange={(e) => handleFormChange('description', e.target.value)}
-                placeholder="Add details about this event"
-                className="min-h-[110px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-xl border bg-background p-3 text-sm min-h-[80px]" 
+                placeholder="Details..."
               />
             </Field>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Location">
-                <InputLike
-                  value={form.location}
-                  onChange={(e) => handleFormChange('location', e.target.value)}
-                  placeholder="Location"
-                />
-              </Field>
+            <div className="flex items-center justify-between p-3 border rounded-xl bg-muted/20">
+               <span className="text-sm font-medium">All-day Event</span>
+               <input type="checkbox" checked={form.allDay} onChange={(e) => handleFormChange('allDay', e.target.checked)} className="h-4 w-4" />
+            </div>
 
-              <Field label="Recurrence">
-                <InputLike
-                  value={form.recurrence}
-                  onChange={(e) => handleFormChange('recurrence', e.target.value)}
-                  placeholder="Optional RRULE later"
-                />
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Start Date" required>
+                <input type="date" value={form.startDate} onChange={(e) => handleFormChange('startDate', e.target.value)} className="w-full border p-2 rounded-lg text-sm" />
+              </Field>
+              <Field label="End Date" required>
+                <input type="date" value={form.endDate} onChange={(e) => handleFormChange('endDate', e.target.value)} className="w-full border p-2 rounded-lg text-sm" />
               </Field>
             </div>
 
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <div>
-                <p className="text-sm font-medium">All-day event</p>
-                <p className="text-xs text-muted-foreground">
-                  Use dates only instead of times.
-                </p>
-              </div>
+            {!form.allDay && (
+               <div className="grid grid-cols-2 gap-4">
+                 <Field label="Start Time" required>
+                   <input type="time" value={form.startTime} onChange={(e) => handleFormChange('startTime', e.target.value)} className="w-full border p-2 rounded-lg text-sm" />
+                 </Field>
+                 <Field label="End Time" required>
+                   <input type="time" value={form.endTime} onChange={(e) => handleFormChange('endTime', e.target.value)} className="w-full border p-2 rounded-lg text-sm" />
+                 </Field>
+               </div>
+            )}
 
-              <input
-                type="checkbox"
-                checked={form.allDay}
-                onChange={(e) => handleFormChange('allDay', e.target.checked)}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Start date" required>
-                <input
-                  type="date"
-                  value={form.startDate}
-                  onChange={(e) => handleFormChange('startDate', e.target.value)}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                />
-              </Field>
-
-              <Field label="End date" required>
-                <input
-                  type="date"
-                  value={form.endDate}
-                  onChange={(e) => handleFormChange('endDate', e.target.value)}
-                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                />
-              </Field>
-            </div>
-
-            {!form.allDay ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Start time" required>
-                  <input
-                    type="time"
-                    value={form.startTime}
-                    onChange={(e) => handleFormChange('startTime', e.target.value)}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  />
-                </Field>
-
-                <Field label="End time" required>
-                  <input
-                    type="time"
-                    value={form.endTime}
-                    onChange={(e) => handleFormChange('endTime', e.target.value)}
-                    className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                  />
-                </Field>
-              </div>
-            ) : null}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setEventDialogOpen(false);
-                  resetForm();
-                }}
-              >
-                Cancel
-              </Button>
-
-              <Button type="submit" disabled={saving}>
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : editingEvent ? (
-                  'Save changes'
-                ) : (
-                  'Add event'
-                )}
+            <DialogFooter className="gap-2">
+              <Button type="button" variant="ghost" onClick={() => setEventDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving} className="rounded-xl">
+                {saving ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+                {editingEvent ? 'Update' : 'Create'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
+      {/* Delete Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Are you sure?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete this event from FamilyHub.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="rounded-2xl border bg-muted/40 p-3 text-sm">
-            {eventToDelete?.title || 'Selected event'}
-          </div>
-
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Event?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will remove "{eventToDelete?.title}" from the family calendar.</p>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setDeleteDialogOpen(false);
-                setEventToDelete(null);
-              }}
-            >
-              Cancel
-            </Button>
-
-            <Button type="button" variant="destructive" onClick={handleDeleteConfirmed} disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
-            </Button>
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>Keep it</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirmed} disabled={saving}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -667,78 +436,59 @@ function CalendarPage() {
   );
 }
 
+// --- HELPER COMPONENTS ---
+
 function EventRow({ event, onEdit, onDelete }) {
+  const isTask = event.type === 'task' || event.source === 'tasks';
+  const isBirthday = event.category === 'birthday';
+
   return (
-    <div className="rounded-2xl border p-4 shadow-sm transition-all duration-200 hover:shadow-md">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold">{event.title}</h3>
-            <Badge variant="secondary" className="text-xs">
-              {event.all_day ? 'All day' : 'Timed'}
-            </Badge>
-            {event.source ? (
-              <Badge variant="outline" className="text-xs">
-                {event.source}
-              </Badge>
-            ) : null}
+    <div className="group rounded-2xl border p-4 shadow-sm hover:border-primary/50 transition-all bg-card">
+      <div className="flex items-center justify-between">
+        <div className="flex items-start gap-3">
+          <div className={`mt-1 p-2 rounded-lg ${isBirthday ? 'bg-pink-100 text-pink-600' : isTask ? 'bg-blue-100 text-blue-600' : 'bg-primary/10 text-primary'}`}>
+             {isBirthday ? <Plus className="h-4 w-4" /> : isTask ? <RefreshCw className="h-4 w-4" /> : <CalendarIcon className="h-4 w-4" />}
           </div>
-
-          <div className="space-y-1 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <Clock3 className="h-3.5 w-3.5" />
-              <span>{formatEventDateRange(event)}</span>
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-bold">{event.title}</h3>
+              {isBirthday && <Badge className="bg-pink-500 hover:bg-pink-600 text-[10px] h-4">Birthday</Badge>}
+              {isTask && <Badge variant="outline" className="text-[10px] h-4 border-blue-200 text-blue-600">Task</Badge>}
             </div>
-
-            {event.location ? (
-              <div className="flex items-center gap-2">
-                <MapPin className="h-3.5 w-3.5" />
-                <span>{event.location}</span>
-              </div>
-            ) : null}
-
-            {event.description ? (
-              <p className="pt-1 text-sm text-muted-foreground">{event.description}</p>
-            ) : null}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+               <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatEventDateRange(event)}</span>
+               {event.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location}</span>}
+            </div>
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="rounded-xl" onClick={onEdit}>
-            <Pencil className="mr-1 h-3.5 w-3.5" />
-            Edit
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-xl text-destructive hover:text-destructive"
-            onClick={onDelete}
-          >
-            <Trash2 className="mr-1 h-3.5 w-3.5" />
-            Delete
-          </Button>
-        </div>
+        {!isBirthday && (
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="icon" onClick={onEdit} className="h-8 w-8 rounded-lg"><Pencil className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" onClick={onDelete} className="h-8 w-8 rounded-lg text-destructive"><Trash2 className="h-3.5 w-3.5" /></Button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function StatCard({ label, value, valueClassName = 'text-slate-900' }) {
+function StatCard({ label, value, valueClassName = '' }) {
   return (
-    <Card className="rounded-2xl shadow-sm">
+    <Card className="rounded-2xl border-none shadow-sm bg-muted/30">
       <CardContent className="p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={`text-xl font-semibold ${valueClassName}`}>{value}</p>
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1">{label}</p>
+        <p className={`text-xl font-black ${valueClassName}`}>{value}</p>
       </CardContent>
     </Card>
   );
 }
 
-function Field({ label, required = false, children }) {
+function Field({ label, required, children }) {
   return (
-    <div className="space-y-2">
-      <label className="text-sm font-medium">
-        {label} {required ? <span className="text-destructive">*</span> : null}
+    <div className="space-y-1.5">
+      <label className="text-xs font-bold uppercase text-muted-foreground ml-1">
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
     </div>
@@ -746,83 +496,45 @@ function Field({ label, required = false, children }) {
 }
 
 function InputLike({ value, onChange, placeholder }) {
-  return (
-    <input
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-    />
-  );
-}
-
-function LoadingBlock({ text }) {
-  return <div className="text-sm text-muted-foreground">{text}</div>;
+  return <input value={value} onChange={onChange} placeholder={placeholder} className="w-full h-11 rounded-xl border bg-background px-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all" />;
 }
 
 function EmptyState({ title, description, actionLabel, onAction }) {
   return (
-    <Card className="rounded-2xl border-dashed shadow-sm">
-      <CardContent className="flex flex-col items-center justify-center px-6 py-12 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-          <CalendarDays className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <h3 className="mb-2 text-lg font-semibold">{title}</h3>
-        <p className="mb-4 max-w-md text-sm text-muted-foreground">{description}</p>
-        {actionLabel && onAction ? (
-          <Button className="rounded-xl" onClick={onAction}>
-            {actionLabel}
-          </Button>
-        ) : null}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center mb-4"><CalendarDays className="h-8 w-8 text-muted-foreground/40" /></div>
+      <h3 className="font-bold">{title}</h3>
+      <p className="text-sm text-muted-foreground mb-6 max-w-[200px]">{description}</p>
+      <Button onClick={onAction} className="rounded-xl">{actionLabel}</Button>
+    </div>
   );
 }
 
+// --- DATE HELPERS ---
+
 function formatDateForInput(date) {
   const d = new Date(date);
-  const year = d.getFullYear();
-  const month = `${d.getMonth() + 1}`.padStart(2, '0');
-  const day = `${d.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function formatTimeForInput(date) {
   const d = new Date(date);
-  const hours = `${d.getHours()}`.padStart(2, '0');
-  const minutes = `${d.getMinutes()}`.padStart(2, '0');
-  return `${hours}:${minutes}`;
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function formatEventDateRange(event) {
   const start = new Date(event.start_at);
   const end = new Date(event.end_at);
+  const same = start.toDateString() === end.toDateString();
 
   if (event.all_day) {
-    return `${start.toLocaleDateString()}${sameDay(start, end) ? '' : ` - ${end.toLocaleDateString()}`}`;
+    return same ? start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
   }
 
-  const same = sameDay(start, end);
-
-  if (same) {
-    return `${start.toLocaleDateString()} • ${start.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-    })} - ${end.toLocaleTimeString([], {
-      hour: 'numeric',
-      minute: '2-digit',
-    })}`;
-  }
-
-  return `${start.toLocaleString()} - ${end.toLocaleString()}`;
-}
-
-function sameDay(a, b) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
+  const timeOptions = { hour: 'numeric', minute: '2-digit' };
+  return same 
+    ? `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} • ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleTimeString([], timeOptions)}`
+    : `${start.toLocaleDateString()} ${start.toLocaleTimeString([], timeOptions)} - ${end.toLocaleTimeString([], timeOptions)}`;
 }
 
 export default CalendarPage;
