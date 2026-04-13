@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Helmet } from 'react-helmet';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -66,9 +66,29 @@ function CalendarPage() {
 
   const [form, setForm] = useState(DEFAULT_FORM);
 
+  // Maps Integration Refs
+  const locationInputRef = useRef(null);
+  const autocompleteRef = useRef(null);
+
   useEffect(() => {
     loadCalendarData();
   }, [currentMonth]);
+
+  // Init Google Autocomplete when Modal Opens
+  useEffect(() => {
+    if (eventDialogOpen && locationInputRef.current && window.google) {
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(locationInputRef.current, {
+        types: ['geocode', 'establishment'],
+      });
+
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current.getPlace();
+        if (place.formatted_address || place.name) {
+          setForm(prev => ({ ...prev, location: place.formatted_address || place.name }));
+        }
+      });
+    }
+  }, [eventDialogOpen]);
 
   async function loadCalendarData() {
     setLoading(true);
@@ -90,12 +110,17 @@ function CalendarPage() {
 
   async function handleGoogleSync() {
     setSaving(true);
+    setErrorText('');
+    setSuccessText('');
     try {
-      await supabase.functions.invoke('hourly-calendar-sync', { body: { mode: 'both' } });
-      setSuccessText('Google Sync complete!');
+      const { data, error } = await supabase.functions.invoke('hourly-calendar-sync', { 
+        body: { mode: 'both' } 
+      });
+      if (error) throw error;
+      setSuccessText('Sync successfully triggered!');
       loadCalendarData();
     } catch (error) {
-      setErrorText('Sync failed.');
+      setErrorText('Sync failed: ' + error.message);
     } finally {
       setSaving(false);
     }
@@ -110,7 +135,6 @@ function CalendarPage() {
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1).getDay();
     const days = new Date(year, month + 1, 0).getDate();
-    
     const calendarDays = [];
     for (let i = 0; i < firstDay; i++) calendarDays.push(null);
     for (let i = 1; i <= days; i++) calendarDays.push(new Date(year, month, i));
@@ -152,7 +176,8 @@ function CalendarPage() {
         all_day: form.allDay,
         timezone: form.timezone,
         recurrence: form.recurrence || null,
-        status: 'confirmed'
+        status: 'confirmed',
+        source: 'familyhub'
       };
 
       let result;
@@ -197,7 +222,7 @@ function CalendarPage() {
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
           <div>
             <h1 className="text-3xl font-black tracking-tighter text-slate-900">Family Calendar</h1>
-            <p className="text-muted-foreground text-sm font-medium">Garza Household Schedule</p>
+            <p className="text-muted-foreground text-sm font-medium text-slate-500">Garza Household Schedule</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -215,6 +240,7 @@ function CalendarPage() {
         </div>
 
         {errorText && <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 text-sm font-bold">{errorText}</div>}
+        {successText && <div className="p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 text-sm font-bold">{successText}</div>}
 
         {viewMode === 'month' ? (
           <Card className="rounded-[2.5rem] border-none shadow-xl bg-white/80 backdrop-blur-md overflow-hidden">
@@ -236,7 +262,7 @@ function CalendarPage() {
               {daysInMonth.map((day, i) => {
                 const dayEvents = day ? sortedEvents.filter(e => new Date(e.start_at).toDateString() === day.toDateString()) : [];
                 return (
-                  <div key={i} className="min-h-[120px] bg-white p-2">
+                  <div key={i} className="min-h-[120px] bg-white p-2 relative group">
                     {day && (
                       <>
                         <span className={cn("text-xs font-bold mb-1 block h-6 w-6 flex items-center justify-center rounded-full", day.toDateString() === new Date().toDateString() ? "bg-blue-600 text-white" : "text-slate-400")}>
@@ -259,15 +285,15 @@ function CalendarPage() {
             <div className="lg:col-span-2 space-y-4">
                {loading ? <div className="py-20 text-center"><Loader2 className="h-10 w-10 animate-spin mx-auto text-blue-600" /></div> : 
                sortedEvents.map(event => (
-                  <Card key={event.id} className="rounded-[2rem] border-none shadow-md bg-white/90 group overflow-hidden">
+                  <Card key={event.id} className="rounded-[2rem] border-none shadow-md bg-white/90 group overflow-hidden hover:shadow-lg transition-all">
                     <div className="flex items-center justify-between p-6">
                       <div className="flex gap-4 items-center">
                         <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><CalendarIcon className="h-6 w-6" /></div>
                         <div>
                           <h3 className="font-black text-lg text-slate-900">{event.title}</h3>
-                          <div className="flex gap-4 mt-1">
+                          <div className="flex flex-wrap gap-4 mt-1">
                             <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatEventDateRange(event)}</span>
-                            {event.location && <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location}</span>}
+                            {event.location && <span className="text-xs font-bold text-slate-500 flex items-center gap-1 max-w-[200px] truncate"><MapPin className="h-3 w-3" /> {event.location}</span>}
                           </div>
                         </div>
                       </div>
@@ -283,7 +309,7 @@ function CalendarPage() {
                                recurrence: event.recurrence || '',
                                allDay: event.all_day,
                                startDate: formatDateForInput(d),
-                               startTime: d.toISOString().substring(11, 16)
+                               startTime: d.getUTCHours().toString().padStart(2, '0') + ':' + d.getUTCMinutes().toString().padStart(2, '0')
                             });
                             setEventDialogOpen(true);
                          }}><Pencil className="h-4 w-4" /></Button>
@@ -301,21 +327,28 @@ function CalendarPage() {
         <DialogContent className="rounded-[2.5rem] border-none shadow-2xl max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black tracking-tighter">Event Details</DialogTitle>
+            <DialogDescription>Syncs automatically with your shared calendar.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4 text-slate-900">
             <div className="space-y-1">
               <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Title</Label>
-              <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Event name..." className="rounded-xl border-0 bg-slate-100 h-12 font-bold" />
+              <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Event name..." className="rounded-xl border-0 bg-slate-100 h-12 font-bold focus-visible:ring-blue-600" />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
-                 <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Location</Label>
-                 <Input value={form.location} onChange={e => setForm({...form, location: e.target.value})} placeholder="Office, Home, etc." className="rounded-xl border-0 bg-slate-100" />
+                 <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Location Search</Label>
+                 <Input 
+                   ref={locationInputRef}
+                   value={form.location} 
+                   onChange={e => setForm({...form, location: e.target.value})} 
+                   placeholder="Google Maps search..." 
+                   className="rounded-xl border-0 bg-slate-100 h-11 focus-visible:ring-blue-600" 
+                 />
                </div>
                <div className="space-y-1">
                  <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Recurrence</Label>
-                 <select value={form.recurrence} onChange={e => setForm({...form, recurrence: e.target.value})} className="w-full rounded-xl border-0 bg-slate-100 h-11 px-3 text-sm">
+                 <select value={form.recurrence} onChange={e => setForm({...form, recurrence: e.target.value})} className="w-full rounded-xl border-0 bg-slate-100 h-11 px-3 text-sm focus:ring-2 focus:ring-blue-600">
                     <option value="">One-time</option>
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -325,41 +358,44 @@ function CalendarPage() {
             </div>
 
             <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="checkbox" id="allDay" checked={form.allDay} onChange={e => setForm({...form, allDay: e.target.checked})} className="rounded h-4 w-4" />
+              <input type="checkbox" id="allDay" checked={form.allDay} onChange={e => setForm({...form, allDay: e.target.checked})} className="rounded h-4 w-4 accent-blue-600" />
               <Label htmlFor="allDay" className="text-sm font-bold">All-day Event</Label>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
                  <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Date</Label>
-                 <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value, endDate: e.target.value})} className="rounded-xl border-0 bg-slate-100" />
+                 <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value, endDate: e.target.value})} className="rounded-xl border-0 bg-slate-100 h-11" />
                </div>
                {!form.allDay && (
                  <div className="space-y-1">
                    <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Time</Label>
-                   <Input type="time" value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} className="rounded-xl border-0 bg-slate-100" />
+                   <Input type="time" value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} className="rounded-xl border-0 bg-slate-100 h-11" />
                  </div>
                )}
             </div>
 
             <div className="space-y-1">
                <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Description</Label>
-               <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full rounded-xl border-0 bg-slate-100 p-3 text-sm min-h-[80px]" placeholder="Add notes..."></textarea>
+               <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full rounded-xl border-0 bg-slate-100 p-3 text-sm min-h-[80px] focus:ring-2 focus:ring-blue-600 outline-none" placeholder="Add additional details..."></textarea>
             </div>
 
-            <Button onClick={handleSaveEvent} disabled={saving} className="w-full bg-blue-600 text-white rounded-2xl h-14 font-black shadow-lg mt-2 hover:bg-blue-700">
-              {saving ? <Loader2 className="animate-spin h-5 w-5" /> : editingEvent ? "Update Event" : "Create Event"}
+            <Button onClick={handleSaveEvent} disabled={saving} className="w-full bg-blue-600 text-white rounded-2xl h-14 font-black shadow-lg mt-2 hover:bg-blue-700 transition-all">
+              {saving ? <Loader2 className="animate-spin h-5 w-5" /> : editingEvent ? "Update GarzaHub Event" : "Create GarzaHub Event"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="rounded-[2.5rem]">
-          <DialogHeader><DialogTitle className="font-black text-xl text-slate-900">Delete?</DialogTitle></DialogHeader>
+        <DialogContent className="rounded-[2.5rem] border-none shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-black text-xl text-slate-900">Delete Event?</DialogTitle>
+            <DialogDescription>This will remove the event from the shared family schedule.</DialogDescription>
+          </DialogHeader>
           <div className="flex gap-2 mt-4">
-            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)} className="rounded-xl flex-1">No</Button>
-            <Button variant="destructive" onClick={handleDeleteConfirmed} className="rounded-xl flex-1 font-bold">Yes, Delete</Button>
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)} className="rounded-xl flex-1 h-12">Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirmed} className="rounded-xl flex-1 font-bold h-12 shadow-lg shadow-red-500/20">Delete Forever</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -373,7 +409,7 @@ function formatDateForInput(date) {
 }
 
 function formatEventDateRange(event) {
-  if (!event.start_at) return 'No date';
+  if (!event.start_at) return 'No date set';
   const start = new Date(event.start_at);
   const options = { hour: 'numeric', minute: '2-digit' };
   return `${start.toLocaleDateString()} @ ${event.all_day ? 'All Day' : start.toLocaleTimeString([], options)}`;
