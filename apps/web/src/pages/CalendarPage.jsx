@@ -73,18 +73,25 @@ function CalendarPage() {
     loadCalendarData();
   }, [currentMonth]);
 
+  // IMPROVED AUTOCOMPLETE ATTACHMENT
   useEffect(() => {
-    if (eventDialogOpen && locationInputRef.current && window.google) {
-      autocompleteRef.current = new window.google.maps.places.Autocomplete(locationInputRef.current, {
-        types: ['geocode', 'establishment'],
-      });
+    if (eventDialogOpen) {
+      // Small delay to ensure Dialog is fully open and Input is in the DOM
+      const timer = setTimeout(() => {
+        if (locationInputRef.current && window.google) {
+          autocompleteRef.current = new window.google.maps.places.Autocomplete(locationInputRef.current, {
+            types: ['geocode', 'establishment'],
+          });
 
-      autocompleteRef.current.addListener('place_changed', () => {
-        const place = autocompleteRef.current.getPlace();
-        if (place.formatted_address || place.name) {
-          setForm(prev => ({ ...prev, location: place.formatted_address || place.name }));
+          autocompleteRef.current.addListener('place_changed', () => {
+            const place = autocompleteRef.current.getPlace();
+            if (place.formatted_address || place.name) {
+              setForm(prev => ({ ...prev, location: place.formatted_address || place.name }));
+            }
+          });
         }
-      });
+      }, 300);
+      return () => clearTimeout(timer);
     }
   }, [eventDialogOpen]);
 
@@ -147,7 +154,6 @@ function CalendarPage() {
   }
 
   async function handleSaveEvent() {
-    // FIX: Ensure date is present before trying to save
     const finalStartDate = form.startDate || formatDateForInput(new Date());
     const finalEndDate = form.endDate || finalStartDate;
 
