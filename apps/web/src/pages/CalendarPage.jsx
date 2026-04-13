@@ -28,8 +28,6 @@ import {
 } from 'lucide-react';
 import {
   getCalendarPageData,
-  addCalendarEvent,
-  updateCalendarEvent,
   deleteCalendarEvent,
 } from '@/lib/calendar.js';
 import { supabase } from '@/lib/supabaseClient';
@@ -47,6 +45,8 @@ const DEFAULT_FORM = {
   timezone: 'America/Chicago',
   recurrence: '',
 };
+
+const HOUSEHOLD_ID = 'd2b8464e-a258-46a0-89de-a1b921062943';
 
 function CalendarPage() {
   const [events, setEvents] = useState([]);
@@ -118,8 +118,8 @@ function CalendarPage() {
   }, [currentMonth]);
 
   function openAddDialog() {
-    const now = formatDateForInput(new Date());
-    setForm({ ...DEFAULT_FORM, startDate: now, endDate: now });
+    const today = formatDateForInput(new Date());
+    setForm({ ...DEFAULT_FORM, startDate: today, endDate: today });
     setEditingEvent(null);
     setEventDialogOpen(true);
   }
@@ -134,48 +134,54 @@ function CalendarPage() {
     setErrorText('');
 
     try {
-      // FIX: Construct proper ISO strings for Supabase
-      const startDateTime = form.allDay 
-        ? `${form.startDate}T00:00:00Z` 
-        : `${form.startDate}T${form.startTime}:00Z`;
+      const startISO = form.allDay 
+        ? `${form.startDate}T00:00:00.000Z` 
+        : `${form.startDate}T${form.startTime}:00.000Z`;
       
-      const endDateTime = form.allDay 
-        ? `${form.endDate}T23:59:59Z` 
-        : `${form.endDate}T${form.endTime}:00Z`;
+      const endISO = form.allDay 
+        ? `${form.endDate}T23:59:59.000Z` 
+        : `${form.endDate}T${form.endTime}:00.000Z`;
 
       const payload = {
+        household_id: HOUSEHOLD_ID,
         title: form.title,
-        description: form.description,
-        location: form.location,
-        start_at: startDateTime,
-        end_at: endDateTime,
+        description: form.description || '',
+        location: form.location || '',
+        start_at: startISO,
+        end_at: endISO,
         all_day: form.allDay,
         timezone: form.timezone,
         recurrence: form.recurrence || null,
         status: 'confirmed',
+        source: 'familyhub',
+        created_by: '00000000-0000-0000-0000-000000000000'
       };
 
+      let result;
       if (editingEvent?.id) {
-        await updateCalendarEvent(editingEvent.id, payload);
+        result = await supabase.from('family_events').update(payload).eq('id', editingEvent.id);
       } else {
-        await addCalendarEvent(payload);
+        result = await supabase.from('family_events').insert([payload]);
       }
+
+      if (result.error) throw result.error;
       
       setEventDialogOpen(false);
-      loadCalendarData();
-      setSuccessText('Event saved!');
+      await loadCalendarData();
+      setSuccessText('Event saved successfully!');
     } catch (error) {
-      setErrorText(error.message);
-      console.error("Save Error:", error);
+      setErrorText(error.message || 'Error communicating with database');
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDeleteConfirmed() {
+    if (!eventToDelete) return;
     setSaving(true);
     try {
-      await deleteCalendarEvent(eventToDelete.id);
+      const { error } = await supabase.from('family_events').delete().eq('id', eventToDelete.id);
+      if (error) throw error;
       setDeleteDialogOpen(false);
       loadCalendarData();
     } catch (error) {
@@ -210,8 +216,6 @@ function CalendarPage() {
           </div>
         </div>
 
-        {errorText && <div className="p-4 bg-red-50 text-red-700 rounded-2xl border border-red-100 text-sm">{errorText}</div>}
-
         {viewMode === 'month' ? (
           <Card className="rounded-[2.5rem] border-none shadow-xl bg-white/80 backdrop-blur-md overflow-hidden">
             <div className="p-6 flex items-center justify-between border-b border-slate-100">
@@ -240,9 +244,7 @@ function CalendarPage() {
                         </span>
                         <div className="space-y-1">
                           {dayEvents.slice(0, 3).map(e => (
-                            <div key={e.id} className="text-[9px] font-bold p-1 rounded bg-blue-50 text-blue-700 truncate border border-blue-100">
-                              {e.title}
-                            </div>
+                            <div key={e.id} className="text-[9px] font-bold p-1 rounded bg-blue-50 text-blue-700 truncate border border-blue-100">{e.title}</div>
                           ))}
                         </div>
                       </>
@@ -265,7 +267,6 @@ function CalendarPage() {
                           <h3 className="font-black text-lg text-slate-900">{event.title}</h3>
                           <div className="flex gap-4 mt-1">
                             <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatEventDateRange(event)}</span>
-                            {event.location && <span className="text-xs font-bold text-slate-500 flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location}</span>}
                           </div>
                         </div>
                       </div>
@@ -274,15 +275,6 @@ function CalendarPage() {
                   </Card>
                ))}
             </div>
-            <div className="space-y-4">
-              <Card className="rounded-[2.5rem] border-none shadow-xl bg-slate-900 text-white p-8">
-                <h3 className="text-xl font-black tracking-tight">Status</h3>
-                <div className="mt-6 space-y-4 text-sm">
-                   <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-slate-400">Google Linked</span><span className="font-bold text-blue-400">{connection?.is_enabled ? 'Yes' : 'No'}</span></div>
-                   <div className="flex justify-between border-b border-white/10 pb-2"><span className="text-slate-400">Total Events</span><span className="font-bold">{events.length}</span></div>
-                </div>
-              </Card>
-            </div>
           </div>
         )}
       </div>
@@ -290,37 +282,13 @@ function CalendarPage() {
       <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}>
         <DialogContent className="rounded-[2.5rem] border-none shadow-2xl max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black tracking-tighter">New Event</DialogTitle>
-            <DialogDescription>Add to the Garza family schedule.</DialogDescription>
+            <DialogTitle className="text-2xl font-black tracking-tighter">Event Details</DialogTitle>
           </DialogHeader>
-
           <div className="space-y-4 py-4">
             <div className="space-y-1">
               <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Title</Label>
               <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} placeholder="Event name..." className="rounded-xl border-0 bg-slate-100 h-12" />
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-1">
-                 <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Location</Label>
-                 <Input value={form.location} onChange={e => setForm({...form, location: e.target.value})} placeholder="Office, Home, etc." className="rounded-xl border-0 bg-slate-100" />
-               </div>
-               <div className="space-y-1">
-                 <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Recurrence</Label>
-                 <select value={form.recurrence} onChange={e => setForm({...form, recurrence: e.target.value})} className="w-full rounded-xl border-0 bg-slate-100 h-10 px-3 text-sm">
-                    <option value="">One-time</option>
-                    <option value="daily">Daily</option>
-                    <option value="weekly">Weekly</option>
-                    <option value="monthly">Monthly</option>
-                 </select>
-               </div>
-            </div>
-
-            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-              <input type="checkbox" id="allDay" checked={form.allDay} onChange={e => setForm({...form, allDay: e.target.checked})} className="rounded h-4 w-4" />
-              <Label htmlFor="allDay" className="text-sm font-bold">All-day Event</Label>
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-1">
                  <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Date</Label>
@@ -333,8 +301,7 @@ function CalendarPage() {
                  </div>
                )}
             </div>
-
-            <Button onClick={handleSaveEvent} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-2xl h-14 font-black shadow-lg shadow-blue-600/20 mt-2">
+            <Button onClick={handleSaveEvent} disabled={saving} className="w-full bg-blue-600 text-white rounded-2xl h-14 font-black shadow-lg mt-2">
               {saving ? <Loader2 className="animate-spin h-5 w-5" /> : "Create Event"}
             </Button>
           </div>
@@ -343,12 +310,11 @@ function CalendarPage() {
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="rounded-[2.5rem]">
-          <DialogHeader><DialogTitle className="font-black text-xl">Delete Event?</DialogTitle></DialogHeader>
-          <p className="text-slate-500 text-sm italic">Remove this event from the GarzaHub?</p>
-          <DialogFooter className="mt-6 gap-2">
-            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" className="rounded-xl px-8 font-bold" onClick={handleDeleteConfirmed}>Delete</Button>
-          </DialogFooter>
+          <DialogHeader><DialogTitle className="font-black text-xl">Delete?</DialogTitle></DialogHeader>
+          <div className="flex gap-2 mt-4">
+            <Button variant="ghost" onClick={() => setDeleteDialogOpen(false)}>No</Button>
+            <Button variant="destructive" onClick={handleDeleteConfirmed}>Yes, Delete</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>
@@ -360,4 +326,10 @@ function formatDateForInput(date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function formatEvent
+function formatEventDateRange(event) {
+  if (!event.start_at) return 'No date';
+  const start = new Date(event.start_at);
+  return `${start.toLocaleDateString()} @ ${event.all_day ? 'All Day' : start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+export default CalendarPage;
