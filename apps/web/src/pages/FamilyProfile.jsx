@@ -39,6 +39,7 @@ function FamilyProfile() {
   const [member, setMember] = useState(null);
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [wishSaving, setWishSaving] = useState(false);
   
   // Profile Edit State
   const [isEditing, setIsEditing] = useState(false);
@@ -100,22 +101,33 @@ function FamilyProfile() {
     }
   }
 
-  async function handleAddWishlist() {
-    if (!newWish.item_name) return;
+  async function handleAddWishlist(e) {
+    if (e) e.preventDefault();
+    if (!newWish.item_name.trim()) return;
     
+    setWishSaving(true);
     const { error } = await supabase
       .from('family_wishlists')
       .insert([{ 
         member_id: memberId, 
-        item_name: newWish.item_name, 
-        item_url: newWish.item_url 
+        item_name: newWish.item_name.trim(), 
+        item_url: newWish.item_url.trim() 
       }]);
 
     if (!error) {
       setNewWish({ item_name: '', item_url: '' });
       setIsAddingWish(false);
-      fetchProfileData(); // Refresh list
+      // Immediately refresh the list
+      const { data: wishlistData } = await supabase
+        .from('family_wishlists')
+        .select('*')
+        .eq('member_id', memberId)
+        .order('created_at', { ascending: false });
+      setWishlist(wishlistData || []);
+    } else {
+      console.error("Wishlist Save Error:", error.message);
     }
+    setWishSaving(false);
   }
 
   if (loading) return <div className="flex h-[60vh] items-center justify-center"><Loader2 className="h-10 w-10 animate-spin text-blue-600" /></div>;
@@ -153,15 +165,8 @@ function FamilyProfile() {
                   <DialogHeader><DialogTitle className="text-2xl font-black tracking-tighter">Manage Details</DialogTitle></DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label className="text-[10px] font-black uppercase ml-1">Height</Label>
-                        {/* FIXED: No escaped quotes here */}
-                        <Input value={editData.height || ''} onChange={e => setEditData({...editData, height: e.target.value})} placeholder="5ft 11in" className="rounded-xl bg-muted/50 border-0" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-[10px] font-black uppercase ml-1">Weight</Label>
-                        <Input value={editData.weight || ''} onChange={e => setEditData({...editData, weight: e.target.value})} placeholder="180 lbs" className="rounded-xl bg-muted/50 border-0" />
-                      </div>
+                      <div className="space-y-1"><Label className="text-[10px] font-black uppercase ml-1">Height</Label><Input value={editData.height || ''} onChange={e => setEditData({...editData, height: e.target.value})} placeholder="5ft 11in" className="rounded-xl bg-muted/50 border-0" /></div>
+                      <div className="space-y-1"><Label className="text-[10px] font-black uppercase ml-1">Weight</Label><Input value={editData.weight || ''} onChange={e => setEditData({...editData, weight: e.target.value})} placeholder="180 lbs" className="rounded-xl bg-muted/50 border-0" /></div>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1"><Label className="text-[10px] font-black uppercase ml-1">Shoe</Label><Input value={editData.shoe_size || ''} onChange={e => setEditData({...editData, shoe_size: e.target.value})} placeholder="10.5" className="rounded-xl bg-muted/50 border-0" /></div>
@@ -179,7 +184,7 @@ function FamilyProfile() {
           </CardContent>
         </Card>
 
-        {/* Sizes Grid */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'Shoe Size', value: member.shoe_size, icon: ShoppingBag },
@@ -215,27 +220,45 @@ function FamilyProfile() {
             </CardContent>
           </Card>
 
-          {/* Wishlist - WIRED UP */}
+          {/* Wishlist */}
           <Card className="rounded-[2.5rem] border-muted/50 shadow-sm overflow-hidden border-pink-100 bg-gradient-to-b from-white to-pink-50/20">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-pink-600 flex items-center gap-2"><Gift className="h-4 w-4" /> Gift Wishlist</CardTitle>
               
               <Dialog open={isAddingWish} onOpenChange={setIsAddingWish}>
                 <DialogTrigger asChild>
-                  <Button size="sm" variant="ghost" className="h-8 rounded-xl text-[10px] font-black text-pink-600 hover:bg-pink-100"><Plus className="h-3 w-3 mr-1" /> Add Item</Button>
+                  <Button size="sm" variant="ghost" className="h-8 rounded-xl text-[10px] font-black text-pink-600 hover:bg-pink-100" onClick={() => setNewWish({item_name: '', item_url: ''})}><Plus className="h-3 w-3 mr-1" /> Add Item</Button>
                 </DialogTrigger>
-                <DialogContent className="rounded-[2.5rem]">
-                  <DialogHeader><DialogTitle className="font-black text-2xl tracking-tighter">Add to Wishlist</DialogTitle></DialogHeader>
+                <DialogContent className="rounded-[2.5rem] z-[100]">
+                  <DialogHeader><DialogTitle className="font-black text-2xl tracking-tighter text-foreground">Add to Wishlist</DialogTitle></DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-black uppercase ml-1">Item Name</Label>
-                      <Input value={newWish.item_name} onChange={e => setNewWish({...newWish, item_name: e.target.value})} placeholder="e.g. New Running Shoes" className="rounded-xl border-0 bg-muted/50" />
+                      <Label className="text-[10px] font-black uppercase ml-1 text-foreground">Item Name</Label>
+                      <Input 
+                        value={newWish.item_name} 
+                        onChange={e => setNewWish({...newWish, item_name: e.target.value})} 
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddWishlist()}
+                        placeholder="e.g. New Running Shoes" 
+                        className="rounded-xl border-0 bg-muted/50 text-foreground" 
+                      />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[10px] font-black uppercase ml-1">Link (Optional)</Label>
-                      <Input value={newWish.item_url} onChange={e => setNewWish({...newWish, item_url: e.target.value})} placeholder="https://amazon.com/..." className="rounded-xl border-0 bg-muted/50" />
+                      <Label className="text-[10px] font-black uppercase ml-1 text-foreground">Link (Optional)</Label>
+                      <Input 
+                        value={newWish.item_url} 
+                        onChange={e => setNewWish({...newWish, item_url: e.target.value})} 
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddWishlist()}
+                        placeholder="https://amazon.com/..." 
+                        className="rounded-xl border-0 bg-muted/50 text-foreground" 
+                      />
                     </div>
-                    <Button onClick={handleAddWishlist} className="w-full bg-pink-600 hover:bg-pink-700 text-white rounded-2xl h-12 font-bold shadow-lg shadow-pink-600/20">Add to List</Button>
+                    <Button 
+                      disabled={wishSaving || !newWish.item_name}
+                      onClick={handleAddWishlist} 
+                      className="w-full bg-pink-600 hover:bg-pink-700 text-white rounded-2xl h-12 font-bold shadow-lg shadow-pink-600/20 relative z-[110]"
+                    >
+                      {wishSaving ? "Saving..." : "Add to List"}
+                    </Button>
                   </div>
                 </DialogContent>
               </Dialog>
@@ -255,7 +278,7 @@ function FamilyProfile() {
                     </div>
                   ))
                 ) : (
-                  <div className="py-12 text-center text-muted-foreground italic text-xs">No items on the list yet.</div>
+                  <div className="py-12 text-center text-muted-foreground italic text-xs font-bold uppercase tracking-widest">List is empty</div>
                 )}
               </div>
             </CardContent>
