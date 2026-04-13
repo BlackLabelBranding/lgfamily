@@ -25,7 +25,6 @@ import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
-  AlignLeft,
 } from 'lucide-react';
 import {
   getCalendarPageData,
@@ -153,9 +152,7 @@ function CalendarPage() {
         all_day: form.allDay,
         timezone: form.timezone,
         recurrence: form.recurrence || null,
-        status: 'confirmed',
-        source: 'familyhub',
-        created_by: '00000000-0000-0000-0000-000000000000'
+        status: 'confirmed'
       };
 
       let result;
