@@ -66,7 +66,6 @@ function CalendarPage() {
 
   const [form, setForm] = useState(DEFAULT_FORM);
 
-  // Maps Integration Refs
   const locationInputRef = useRef(null);
   const autocompleteRef = useRef(null);
 
@@ -74,7 +73,6 @@ function CalendarPage() {
     loadCalendarData();
   }, [currentMonth]);
 
-  // Init Google Autocomplete when Modal Opens
   useEffect(() => {
     if (eventDialogOpen && locationInputRef.current && window.google) {
       autocompleteRef.current = new window.google.maps.places.Autocomplete(locationInputRef.current, {
@@ -149,8 +147,12 @@ function CalendarPage() {
   }
 
   async function handleSaveEvent() {
-    if (!form.title.trim() || !form.startDate) {
-      alert("Please enter a title and date");
+    // FIX: Ensure date is present before trying to save
+    const finalStartDate = form.startDate || formatDateForInput(new Date());
+    const finalEndDate = form.endDate || finalStartDate;
+
+    if (!form.title.trim()) {
+      alert("Please enter a title");
       return;
     }
 
@@ -159,12 +161,12 @@ function CalendarPage() {
 
     try {
       const startISO = form.allDay 
-        ? `${form.startDate}T00:00:00.000Z` 
-        : `${form.startDate}T${form.startTime}:00.000Z`;
+        ? `${finalStartDate}T00:00:00.000Z` 
+        : `${finalStartDate}T${form.startTime || '09:00'}:00.000Z`;
       
       const endISO = form.allDay 
-        ? `${form.endDate}T23:59:59.000Z` 
-        : `${form.endDate}T${form.endTime}:00.000Z`;
+        ? `${finalEndDate}T23:59:59.000Z` 
+        : `${finalEndDate}T${form.endTime || '10:00'}:00.000Z`;
 
       const payload = {
         household_id: HOUSEHOLD_ID,
