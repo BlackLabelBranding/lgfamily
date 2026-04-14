@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
-import { create } from "https://deno.land/x/djwt@v2.8/mod.ts";
+import { SignJWT, importPKCS8 } from 'https://esm.sh/jose@5.2.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,52 +8,56 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  // STEP 1: IMMEDIATELY HANDLE OPTIONS
+  // 1. IMMEDIATELY HANDLE OPTIONS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // STEP 2: SETUP CLIENTS
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') || '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
     );
 
-    // Get the request body
     const { mode = 'both' } = await req.json().catch(() => ({}));
 
-    // STEP 3: AUTH WITH GOOGLE
     const gEmail = Deno.env.get('G_SERVICE_ACCOUNT_EMAIL');
-    const gKey = Deno.env.get('G_PRIVATE_KEY')?.replace(/\\n/g, '\n');
+    const gKeyRaw = Deno.env.get('G_PRIVATE_KEY');
 
-    if (!gEmail || !gKey) {
+    if (!gEmail || !gKeyRaw) {
       throw new Error('Missing Google Credentials in Supabase Secrets');
     }
 
-    const jwt = await create({ alg: "RS256", typ: "JWT" }, {
+    const gKey = gKeyRaw.replace(/\\n/g, '\n');
+    const privateKey = await importPKCS8(gKey, 'RS256');
+    const token = await new SignJWT({
       iss: gEmail,
       scope: "https://www.googleapis.com/auth/calendar.events",
       aud: "https://oauth2.googleapis.com/token",
-      exp: Math.floor(Date.now() / 1000) + 3600,
-      iat: Math.floor(Date.now() / 1000),
-    }, gKey);
+    })
+      .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(privateKey);
 
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${token}`,
     });
+
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      throw new Error(`Google Auth Failed: ${errText}`);
+    }
 
     const { access_token } = await tokenRes.json();
 
-    // STEP 4: FETCH AND SYNC
     const { data: connections } = await supabase
       .from('calendar_connections')
       .select('*')
       .eq('is_enabled', true);
 
-    // Simple loop to push events
     for (const conn of connections || []) {
       const { data: events } = await supabase
         .from('family_events')
@@ -87,7 +91,7 @@ Deno.serve(async (req) => {
     console.error("Critical Error:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400, // Changed from 500 to 400 to ensure "HTTP OK" logic isn't tripped
+      status: 400,
     });
   }
 });
