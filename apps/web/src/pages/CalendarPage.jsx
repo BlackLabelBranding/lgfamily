@@ -73,25 +73,33 @@ function CalendarPage() {
     loadCalendarData();
   }, [currentMonth]);
 
-  // IMPROVED AUTOCOMPLETE ATTACHMENT
+  // NEW ASYNC GOOGLE PLACES LOADER
   useEffect(() => {
     if (eventDialogOpen) {
-      // Small delay to ensure Dialog is fully open and Input is in the DOM
-      const timer = setTimeout(() => {
-        if (locationInputRef.current && window.google) {
-          autocompleteRef.current = new window.google.maps.places.Autocomplete(locationInputRef.current, {
-            types: ['geocode', 'establishment'],
-          });
+      const initAutocomplete = async () => {
+        try {
+          if (!window.google?.maps?.importLibrary) return;
+          
+          const { Autocomplete } = await window.google.maps.importLibrary("places");
+          
+          if (locationInputRef.current) {
+            autocompleteRef.current = new Autocomplete(locationInputRef.current, {
+              types: ['geocode', 'establishment'],
+            });
 
-          autocompleteRef.current.addListener('place_changed', () => {
-            const place = autocompleteRef.current.getPlace();
-            if (place.formatted_address || place.name) {
-              setForm(prev => ({ ...prev, location: place.formatted_address || place.name }));
-            }
-          });
+            autocompleteRef.current.addListener('place_changed', () => {
+              const place = autocompleteRef.current.getPlace();
+              if (place.formatted_address || place.name) {
+                setForm(prev => ({ ...prev, location: place.formatted_address || place.name }));
+              }
+            });
+          }
+        } catch (err) {
+          console.error("Google Maps Places failed to load:", err);
         }
-      }, 300);
-      return () => clearTimeout(timer);
+      };
+
+      initAutocomplete();
     }
   }, [eventDialogOpen]);
 
@@ -125,7 +133,7 @@ function CalendarPage() {
       setSuccessText('Sync successfully triggered!');
       loadCalendarData();
     } catch (error) {
-      setErrorText('Sync failed: ' + error.message);
+      setErrorText('Sync connection error. Check Supabase Edge Function CORS.');
     } finally {
       setSaving(false);
     }
@@ -334,8 +342,8 @@ function CalendarPage() {
       <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}>
         <DialogContent className="rounded-[2.5rem] border-none shadow-2xl max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black tracking-tighter">Event Details</DialogTitle>
-            <DialogDescription>Syncs automatically with your shared calendar.</DialogDescription>
+            <DialogTitle className="text-2xl font-black tracking-tighter text-slate-900">Event Details</DialogTitle>
+            <DialogDescription>Syncs automatically with your shared family calendar.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4 text-slate-900">
             <div className="space-y-1">
@@ -389,7 +397,7 @@ function CalendarPage() {
             </div>
 
             <Button onClick={handleSaveEvent} disabled={saving} className="w-full bg-blue-600 text-white rounded-2xl h-14 font-black shadow-lg mt-2 hover:bg-blue-700 transition-all">
-              {saving ? <Loader2 className="animate-spin h-5 w-5" /> : editingEvent ? "Update GarzaHub Event" : "Create GarzaHub Event"}
+              {saving ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : editingEvent ? "Update GarzaHub Event" : "Create GarzaHub Event"}
             </Button>
           </div>
         </DialogContent>
