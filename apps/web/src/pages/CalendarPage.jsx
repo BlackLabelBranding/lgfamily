@@ -117,8 +117,8 @@ function CalendarPage() {
     setErrorText('');
     setSuccessText('');
     try {
-      // Calling the properly named function!
-      const { data, error } = await supabase.functions.invoke('hourly-calendar-sync', { 
+      // 🚨 THIS IS THE FIX: Matches your exact Supabase function name 🚨
+      const { data, error } = await supabase.functions.invoke('hourly-calendar-sync-index-ts', { 
         body: { mode: 'both' } 
       });
       if (error) throw error;
