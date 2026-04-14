@@ -94,4 +94,5 @@ Deno.serve(async (req) => {
       status: 400,
     });
   }
+  export default CalendarPage;
 });
