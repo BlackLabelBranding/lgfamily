@@ -20,8 +20,6 @@ import {
   RefreshCw,
   Loader2,
   Calendar as CalendarIcon,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import { getCalendarPageData } from '@/lib/calendar.js';
 import { supabase } from '@/lib/supabaseClient';
@@ -46,23 +44,17 @@ function CalendarPage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [errorText, setErrorText] = useState('');
   const [successText, setSuccessText] = useState('');
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
-  const [eventToDelete, setEventToDelete] = useState(null);
   const [form, setForm] = useState(DEFAULT_FORM);
 
   const autocompleteRef = useRef(null);
 
-  useEffect(() => {
-    loadCalendarData();
-  }, [currentMonth]);
+  useEffect(() => { loadCalendarData(); }, [currentMonth]);
 
-  // FIX: Attach Google Autocomplete to the Input inside the Dialog
   useEffect(() => {
     if (eventDialogOpen) {
       const timer = setTimeout(() => {
@@ -71,20 +63,15 @@ function CalendarPage() {
           autocompleteRef.current = new window.google.maps.places.Autocomplete(input, {
             types: ['geocode', 'establishment'],
           });
-
           autocompleteRef.current.addListener('place_changed', () => {
             const place = autocompleteRef.current.getPlace();
             if (place.formatted_address || place.name) {
               setForm(prev => ({ ...prev, location: place.formatted_address || place.name }));
             }
           });
-          
-          // Prevent Dialog from closing on Enter key when selecting an address
-          input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') e.stopPropagation();
-          });
+          input.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.stopPropagation(); });
         }
-      }, 400); // Wait for Dialog animation
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [eventDialogOpen]);
@@ -98,11 +85,8 @@ function CalendarPage() {
       const endAt = new Date(year, month + 2, 0).toISOString();
       const data = await getCalendarPageData({ startAt, endAt });
       setEvents(data.events || []);
-    } catch (error) {
-      setErrorText('Failed to load schedule.');
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { setErrorText('Failed to load schedule.'); }
+    finally { setLoading(false); }
   }
 
   async function handleGoogleSync() {
@@ -110,33 +94,13 @@ function CalendarPage() {
     setErrorText('');
     setSuccessText('');
     try {
-      const { error } = await supabase.functions.invoke('hourly-calendar-sync-index-ts', { 
-        body: { mode: 'both' } 
-      });
+      const { error } = await supabase.functions.invoke('hourly-calendar-sync-index-ts', { body: { mode: 'both' } });
       if (error) throw error;
       setSuccessText('Sync successfully triggered!');
       loadCalendarData();
-    } catch (error) {
-      setErrorText('Sync error. Ensure service account has access.');
-    } finally {
-      setSaving(false);
-    }
+    } catch (error) { setErrorText('Sync error.'); }
+    finally { setSaving(false); }
   }
-
-  const sortedEvents = useMemo(() => {
-    return [...events].sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
-  }, [events]);
-
-  const daysInMonth = useMemo(() => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    const firstDay = new Date(year, month, 1).getDay();
-    const days = new Date(year, month + 1, 0).getDate();
-    const calendarDays = [];
-    for (let i = 0; i < firstDay; i++) calendarDays.push(null);
-    for (let i = 1; i <= days; i++) calendarDays.push(new Date(year, month, i));
-    return calendarDays;
-  }, [currentMonth]);
 
   function openAddDialog() {
     const today = formatDateForInput(new Date());
@@ -164,19 +128,13 @@ function CalendarPage() {
         status: 'confirmed',
         source: 'familyhub'
       };
-      if (editingEvent?.id) {
-        await supabase.from('family_events').update(payload).eq('id', editingEvent.id);
-      } else {
-        await supabase.from('family_events').insert([payload]);
-      }
+      if (editingEvent?.id) await supabase.from('family_events').update(payload).eq('id', editingEvent.id);
+      else await supabase.from('family_events').insert([payload]);
       setEventDialogOpen(false);
       loadCalendarData();
       setSuccessText('Event saved successfully!');
-    } catch (error) {
-      setErrorText('Error saving event');
-    } finally {
-      setSaving(false);
-    }
+    } catch (error) { setErrorText('Error saving event'); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -188,7 +146,7 @@ function CalendarPage() {
             <h1 className="text-3xl font-black tracking-tighter text-slate-900">Family Calendar</h1>
             <p className="text-slate-500 font-medium">Garza Household Schedule</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
             <Button variant="outline" className="rounded-xl h-10" onClick={handleGoogleSync} disabled={saving}>
               <RefreshCw className={cn("h-4 w-4 mr-2", saving && "animate-spin")} /> Sync
             </Button>
@@ -198,60 +156,101 @@ function CalendarPage() {
           </div>
         </div>
 
-        {viewMode === 'list' && (
-          <div className="space-y-4">
-            {loading ? <Loader2 className="animate-spin mx-auto mt-10" /> : 
-              sortedEvents.map(event => (
-                <Card key={event.id} className="p-6 rounded-[2rem] border-none shadow-sm flex items-center justify-between bg-white group hover:shadow-md transition-all">
-                  <div className="flex gap-4 items-center">
-                    <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center"><CalendarIcon /></div>
-                    <div>
-                      <h3 className="font-black text-slate-900">{event.title}</h3>
-                      <div className="flex gap-3 text-xs font-bold text-slate-500 mt-1">
-                        <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatEventDateRange(event)}</span>
-                        {event.location && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location}</span>}
-                      </div>
+        <div className="space-y-4">
+          {loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-blue-600" /></div> : 
+            events.map(event => (
+              <Card key={event.id} className="p-6 rounded-[2rem] border-none shadow-sm flex items-center justify-between bg-white group hover:shadow-md transition-all">
+                <div className="flex gap-4 items-center">
+                  <div className="h-12 w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center"><CalendarIcon /></div>
+                  <div>
+                    <h3 className="font-black text-slate-900">{event.title}</h3>
+                    <div className="flex gap-3 text-xs font-bold text-slate-500 mt-1">
+                      <span className="flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatEventDateRange(event)}</span>
+                      {event.location && <span className="flex items-center gap-1 line-clamp-1"><MapPin className="h-3 w-3" /> {event.location}</span>}
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="text-red-400 group-hover:opacity-100 opacity-0" onClick={async () => {
+                </div>
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="ghost" size="icon" className="text-slate-400" onClick={() => {
+                    setEditingEvent(event);
+                    const d = new Date(event.start_at);
+                    setForm({
+                      ...form,
+                      title: event.title,
+                      location: event.location,
+                      description: event.description || '',
+                      recurrence: event.recurrence || '',
+                      allDay: event.all_day,
+                      startDate: formatDateForInput(d),
+                      startTime: d.getUTCHours().toString().padStart(2, '0') + ':' + d.getUTCMinutes().toString().padStart(2, '0')
+                    });
+                    setEventDialogOpen(true);
+                  }}><Pencil className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="text-red-400" onClick={async () => {
                     await supabase.from('family_events').delete().eq('id', event.id);
                     loadCalendarData();
                   }}><Trash2 className="h-4 w-4" /></Button>
-                </Card>
-              ))
-            }
-          </div>
-        )}
+                </div>
+              </Card>
+            ))
+          }
+        </div>
       </div>
 
       <Dialog open={eventDialogOpen} onOpenChange={setEventDialogOpen}>
-        <DialogContent className="rounded-[2rem] max-w-lg">
+        <DialogContent className="rounded-[2.5rem] border-none shadow-2xl max-w-xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black">Event Details</DialogTitle>
-            <DialogDescription>Add to your Google Family Calendar.</DialogDescription>
+            <DialogTitle className="text-2xl font-black tracking-tighter text-slate-900">Event Details</DialogTitle>
+            <DialogDescription>Shared family schedule.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 text-slate-900">
             <div className="space-y-1">
-              <Label className="text-[10px] font-black uppercase text-slate-500">Title</Label>
-              <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="rounded-xl bg-slate-100 border-none h-12 font-bold" />
+              <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Title</Label>
+              <Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} className="rounded-xl border-0 bg-slate-100 h-12 font-bold" />
             </div>
-            <div className="space-y-1">
-              <Label className="text-[10px] font-black uppercase text-slate-500">Location Search</Label>
-              <Input id="location-input" value={form.location} onChange={e => setForm({...form, location: e.target.value})} placeholder="Google Maps search..." className="rounded-xl bg-slate-100 border-none h-12" />
-            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label className="text-[10px] font-black uppercase text-slate-500">Date</Label>
-                <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value, endDate: e.target.value})} className="rounded-xl bg-slate-100 border-none h-11" />
-              </div>
-              {!form.allDay && (
-                <div className="space-y-1">
-                  <Label className="text-[10px] font-black uppercase text-slate-500">Time</Label>
-                  <Input type="time" value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} className="rounded-xl bg-slate-100 border-none h-11" />
-                </div>
-              )}
+               <div className="space-y-1">
+                 <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Location Lookup</Label>
+                 <Input id="location-input" value={form.location} onChange={e => setForm({...form, location: e.target.value})} placeholder="Google Maps search..." className="rounded-xl border-0 bg-slate-100 h-11" />
+               </div>
+               <div className="space-y-1">
+                 <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Recurrence</Label>
+                 <select value={form.recurrence} onChange={e => setForm({...form, recurrence: e.target.value})} className="w-full rounded-xl border-0 bg-slate-100 h-11 px-3 text-sm">
+                    <option value="">One-time</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                 </select>
+               </div>
             </div>
-            <Button onClick={handleSaveEvent} className="w-full bg-blue-600 text-white rounded-2xl h-14 font-black mt-4 shadow-lg">Save Event</Button>
+
+            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <input type="checkbox" id="allDay" checked={form.allDay} onChange={e => setForm({...form, allDay: e.target.checked})} className="rounded h-4 w-4 accent-blue-600" />
+              <Label htmlFor="allDay" className="text-sm font-bold">All-day Event</Label>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-1">
+                 <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Date</Label>
+                 <Input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value, endDate: e.target.value})} className="rounded-xl border-0 bg-slate-100 h-11" />
+               </div>
+               {!form.allDay && (
+                 <div className="space-y-1">
+                   <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Time</Label>
+                   <Input type="time" value={form.startTime} onChange={e => setForm({...form, startTime: e.target.value})} className="rounded-xl border-0 bg-slate-100 h-11" />
+                 </div>
+               )}
+            </div>
+
+            <div className="space-y-1">
+               <Label className="text-[10px] font-black uppercase text-slate-500 ml-1">Description</Label>
+               <textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} className="w-full rounded-xl border-0 bg-slate-100 p-3 text-sm min-h-[80px]" placeholder="Extra notes..."></textarea>
+            </div>
+
+            <Button onClick={handleSaveEvent} disabled={saving} className="w-full bg-blue-600 text-white rounded-2xl h-14 font-black shadow-lg">
+              {saving ? <Loader2 className="animate-spin h-5 w-5" /> : "Save to GarzaHub"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
